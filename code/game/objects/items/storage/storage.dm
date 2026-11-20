@@ -20,7 +20,14 @@
 	. = ..()
 	AddComponent(component_type)
 	spawn(0) // PopulateContents can be a sleeping proc; we don't want to force the initialization subsystem to wait for it. so we don't.
-		PopulateContents() // the atom's already been successfully initialized no matter what happens past this point anyway
+		// Implemented with AI architecting.
+		// Persistence: while a character load is restoring inventory, a
+		// container must come back exactly as saved — its defaults stay
+		// out. (The flag is set by apply_to() and cleared a tick later,
+		// after every PopulateContents scheduled during the load has
+		// checked it.)
+		if(!GLOB.persistence_suppress_populate)
+			PopulateContents() // the atom's already been successfully initialized no matter what happens past this point anyway
 
 		for (var/obj/item/item in src)
 			item.item_flags |= IN_STORAGE

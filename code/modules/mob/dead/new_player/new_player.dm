@@ -103,28 +103,9 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 				if(length(client.prefs.ooc_notes) < MINIMUM_OOC_NOTES)
 					to_chat(src, span_boldwarning("You need at least a few words in your OOC notes in order to play."))
 					return
-				// Implemented with AI architecting.
-				// Persistence: if this character has a saved state, ask
-				// whether to use it at roundstart. Only asked when
-				// actually transitioning to ready; the answer is
-				// remembered on the lobby player for the round.
-				if(ready != PLAYER_READY_TO_PLAY)
-					use_saved_state = FALSE
-					saved_state_character = ""
-					var/datum/character_save/CS = new /datum/character_save()
-					if(CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name))
-						var/saved_job = CS.job_title ? " ([CS.job_title])" : ""
-						var/choice = alert(src, "A saved state exists for [CS.real_name][saved_job] from a previous round. Do you want to continue as that saved character?", "Saved character", "Use saved state", "Start fresh")
-						use_saved_state = (choice == "Use saved state")
-						saved_state_character = CS.real_name
 
 			if(ready != tready)
 				ready = tready
-				if(tready != PLAYER_READY_TO_PLAY)
-					// Persistence: unreadying forgets the saved-state
-					// answer; readying up again asks anew.
-					use_saved_state = FALSE
-					saved_state_character = ""
 				if(tready != PLAYER_READY_TO_PLAY && SSvote.mode)
 					SSvote.remove_vote_for_ckey(ckey)
 					SSvote.show_vote(client)

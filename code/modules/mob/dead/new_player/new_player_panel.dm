@@ -47,9 +47,29 @@
 						to_chat(src, span_boldwarning("You need at least a few words in your OOC notes in order to play."))
 						return TRUE
 
+					// Implemented with AI architecting.
+					// Persistence: if this character has a saved state,
+					// ask whether to use it at roundstart. The lobby is
+					// a TGUI panel, so the question lives here, in
+					// ui_act — not in the Topic ready handler, which the
+					// lobby no longer uses. The answer is remembered on
+					// the lobby player for the round.
+					use_saved_state = FALSE
+					saved_state_character = ""
+					var/datum/character_save/CS = new /datum/character_save()
+					if(CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name))
+						var/saved_job = CS.job_title ? " ([CS.job_title])" : ""
+						var/choice = alert(src, "A saved state exists for [CS.real_name][saved_job] from a previous round. Do you want to continue as that saved character?", "Saved character", "Use saved state", "Start fresh")
+						use_saved_state = (choice == "Use saved state")
+						saved_state_character = CS.real_name
+
 					ready = PLAYER_READY_TO_PLAY
 				else
 					ready = PLAYER_NOT_READY
+					// Persistence: unreadying forgets the saved-state
+					// answer; readying up again asks anew.
+					use_saved_state = FALSE
+					saved_state_character = ""
 			return TRUE
 		if("migrants")
 			client.prefs.migrant.show_ui()

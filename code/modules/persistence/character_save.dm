@@ -33,11 +33,11 @@
 // identified — in save_errors.log inside that character's save folder, so
 // the failure sits next to the save it belongs to.
 //
-// The load path (apply_to) is NOT wired into the live spawn path yet. It is
-// built parallel to copy_to(): appearance and species come from the save,
-// stats and skills are applied as saved final values (no re-roll), and job
-// equip is never run. Wire it into new_player.dm only once the save
-// round-trips cleanly on Dun World.
+// The load path (apply_to) is wired into the live spawn path: latejoin
+// (AttemptLateSpawn) and roundstart (equip_characters), both asking the
+// player first. It is built parallel to copy_to(): appearance and species
+// come from the save, stats and skills are applied as saved final values
+// (no re-roll), and job equip is never run.
 //
 // This code has not been compiled: BYOND cannot run on this machine.
 // Compile it locally with tools/build/build.bat (BYOND 516.1687, the version
@@ -45,6 +45,14 @@
 
 #define CHARACTER_SAVE_VERSION_MIN 1
 #define CHARACTER_SAVE_VERSION_MAX 1
+
+// While a character load is restoring inventory, containers must NOT fill
+// themselves with their default contents: /obj/item/storage populates a
+// tick after Initialize() (spawn(0) PopulateContents()), so the defaults
+// would land on top of the restored saved contents. Set TRUE while a load
+// is rebuilding inventory, cleared a tick later, after every PopulateContents
+// scheduled during the load has had its chance to check it.
+GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 
 // The primary treasury ID lives on the human so the save can read it. The
 // treasury itself does not exist yet; the field stays empty until it does.
@@ -619,7 +627,13 @@
 		H.blood_volume = blood_volume
 
 	// Inventory, rebuilt from typepaths. Nothing here runs the job equip.
+	// Containers are restored exactly as saved: the flag below stops
+	// storage items from re-adding their default contents a tick later,
+	// and restore_inventory empties anything Initialize() already put in.
+	GLOB.persistence_suppress_populate = TRUE
 	restore_inventory(H, inventory, null)
+	spawn(1)
+		GLOB.persistence_suppress_populate = FALSE
 
 	// Magic and religion. Spells first: aspect attunement auto-resolves
 	// its choice spell from the spells the character already has.
@@ -680,6 +694,14 @@
 		if(!ispath(item_type, /obj/item))
 			continue
 		var/obj/item/I = new item_type(H.loc)
+		// A container can fill itself in Initialize() — a pre-packed box,
+		// a stocked pouch — and the save already records the exact
+		// contents it had, so anything already inside a freshly created
+		// item is a default that must go before the saved contents are
+		// restored. (Storage items populate a tick later instead; the
+		// suppress flag above stops that half.)
+		for(var/obj/item/C in I.contents.Copy())
+			qdel(C)
 		if(parent)
 			I.forceMove(parent)
 		else
