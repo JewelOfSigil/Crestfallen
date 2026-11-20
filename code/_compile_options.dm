@@ -8,10 +8,11 @@
 //0 test
 //12 minutes norma
 //#define ROUNDTIMERBOAT (300 MINUTES)
-#define INITIAL_ROUND_TIMER (165 MINUTES)
+#define INITIAL_ROUND_TIMER (1410 MINUTES)
 #define ROUND_EXTENSION_TIME (30 MINUTES)
-#define ROUND_END_TIME (15 MINUTES)
-#define ROUND_END_TIME_VERBAL "15 minutes"
+#define ROUND_END_TIME (30 MINUTES)
+#define ROUND_END_TIME_VERBAL "Daily Restart in 30 minutes. Please secure all essential belongings on your person or in a structural container."
+#define ROUND_END_TIME_VOTED "Player-Approved Restart in 30 minutes. Please secure all essential belongings on your person or in a structural container."
 //180 norma
 //60 test
 

@@ -787,7 +787,8 @@ SUBSYSTEM_DEF(gamemode)
 		return TRUE
 
 	var/ttime = world.time - SSticker.round_start_time
-	if(ttime >= GLOB.round_timer)
+	var/daily_restart = FALSE //Set this to TRUE when player/world persistence is achieved.
+	if(ttime >= GLOB.round_timer && daily_restart)
 		if(roundvoteend)
 			if(world.time >= round_ends_at)
 //				for(var/mob/living/carbon/human/H in GLOB.human_list)
@@ -797,9 +798,10 @@ SUBSYSTEM_DEF(gamemode)
 //							H.allmig_reward = 0
 				return TRUE
 		else
-			if(!SSvote.mode)
-				SSvote.initiate_vote("endround", pick("Zlod", "Sun King", "Gaia", "Moon Queen", "Aeon", "Gemini", "Aries"))
-	else if(roundvoteend && world.time >= round_ends_at)
+			to_chat(world, "\n<font color='purple'>[ROUND_END_TIME_VERBAL]</font>")
+			SSgamemode.roundvoteend = TRUE
+			SSgamemode.round_ends_at = world.time + ROUND_END_TIME
+	else if(roundvoteend && world.time >= round_ends_at)	// This may look redundant at a glance, but this checks if a successful Endround vote is called *before* the predefined round timer is reached.
 		return TRUE
 
 /datum/controller/subsystem/gamemode/proc/generate_town_goals()
