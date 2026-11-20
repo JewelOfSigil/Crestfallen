@@ -40,8 +40,8 @@
 // round-trips cleanly on Dun World.
 //
 // This code has not been compiled: BYOND cannot run on this machine.
-// Compile it locally with DreamMaker (BYOND 516.1687, the version the repo
-// pins) before trusting any of it.
+// Compile it locally with tools/build/build.bat (BYOND 516.1687, the version
+// the repo pins) before trusting any of it.
 
 #define CHARACTER_SAVE_VERSION_MIN 1
 #define CHARACTER_SAVE_VERSION_MAX 1
