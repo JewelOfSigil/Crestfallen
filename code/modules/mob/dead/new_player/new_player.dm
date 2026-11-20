@@ -16,6 +16,12 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 	// still selected at roundstart.
 	var/use_saved_state = FALSE
 	var/saved_state_character = ""
+	// Implemented with AI architecting.
+	// Persistence: the latejoin entry prompt's answer. The entry prompt
+	// (before the role list) records its answer here so AttemptLateSpawn
+	// does not ask a second time; AttemptLateSpawn consumes (clears) it.
+	var/latejoin_save_decided = FALSE
+	var/latejoin_use_save = FALSE
 	var/spawning = 0//Referenced when you want to delete the new_player later on in the code.
 	var/topjob = "Hero!"
 	flags_1 = NONE
@@ -126,6 +132,9 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 			return
 
 		if(href_list["late_join"] == "override")
+			// Implemented with AI architecting.
+			if(try_latejoin_saved())
+				return
 			LateChoices()
 			return
 
@@ -162,6 +171,9 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 					SSticker.queued_players += usr
 					to_chat(usr, span_notice("Thou have been added to the queue to join the game. Your position in queue is [SSticker.queued_players.len]."))
 				return
+		// Implemented with AI architecting.
+		if(try_latejoin_saved())
+			return
 		LateChoices()
 
 	if(href_list["SelectedJob"])
@@ -336,7 +348,48 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 		return JOB_UNAVAILABLE_GENERIC
 	return JOB_AVAILABLE
 
+// Implemented with AI architecting.
+// Persistence: the latejoin entry prompt. Asks about a saved state BEFORE
+// the role list is shown. Returns TRUE if the player joined via the saved
+// state (the caller should return); FALSE if the role list should be
+// shown instead (no save, a no answer, or a saved job that is no longer
+// available). The flavour-text and OOC-notes checks mirror the ones in
+// the SelectedJob branch, so the yes path cannot bypass them; they are
+// silent here because the SelectedJob branch still reports them if the
+// player goes on to pick a role.
+/mob/dead/new_player/proc/try_latejoin_saved()
+	if(!client || !client.prefs)
+		return FALSE
+	if(length(client.prefs.flavortext) < MINIMUM_FLAVOR_TEXT)
+		return FALSE
+	if(length(client.prefs.ooc_notes) < MINIMUM_OOC_NOTES)
+		return FALSE
+	var/datum/character_save/CS = new /datum/character_save()
+	if(!(CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name)))
+		return FALSE
+	if(!CS.job_title || !SSjob.GetJob(CS.job_title) || IsJobUnavailable(CS.job_title, TRUE) != JOB_AVAILABLE)
+		return FALSE
+	var/saved_job = " ([CS.job_title])"
+	var/choice = alert(src, "A saved state exists for [CS.real_name][saved_job] from a previous round. Do you want to continue as that saved character?", "Saved character", "Use saved state", "Start fresh")
+	latejoin_save_decided = TRUE
+	latejoin_use_save = (choice == "Use saved state")
+	if(!latejoin_use_save)
+		return FALSE
+	AttemptLateSpawn(CS.job_title)
+	return TRUE
+
 /mob/dead/new_player/proc/AttemptLateSpawn(rank)
+	// Implemented with AI architecting.
+	// Persistence: the latejoin entry prompt (before the role list) may
+	// already have asked about a saved state. If it did, its answer
+	// stands and no second prompt is shown; the decision is consumed
+	// here, so a later attempt asks anew.
+	var/latejoin_save_asked = latejoin_save_decided
+	var/latejoin_save_answer = FALSE
+	if(latejoin_save_asked)
+		latejoin_save_answer = latejoin_use_save
+		latejoin_save_decided = FALSE
+		latejoin_use_save = FALSE
 	var/error = IsJobUnavailable(rank, TRUE)
 	if(error != JOB_AVAILABLE)
 		to_chat(src, span_warning("[get_job_unavailable_error_message(error, rank)]"))
@@ -351,19 +404,23 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 	SSticker.queue_delay = 4
 
 	// Implemented with AI architecting.
-	// Persistence: if this character has a saved state, ask the player
-	// whether to use it. The saved job wins over the picked rank, since
-	// the save IS the character. Assumes the created human's real_name
-	// equals the active slot name (client.prefs.real_name); forced random
-	// names are out of scope for Prototype 1.
-	var/use_save = FALSE
+	// Persistence: if the entry prompt did not already ask, ask here —
+	// this covers any entry that did not go through the role list.
+	// The saved job wins over the picked rank, since the save IS the
+	// character. Assumes the created human's real_name equals the active
+	// slot name (client.prefs.real_name); forced random names are out of
+	// scope for Prototype 1.
+	var/use_save = latejoin_save_answer
 	var/datum/character_save/CS = new /datum/character_save()
-	if(CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name))
+	var/has_save = CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name)
+	if(has_save && !latejoin_save_asked)
 		var/saved_job = CS.job_title ? " ([CS.job_title])" : ""
 		var/choice = alert(src, "A saved state exists for [CS.real_name][saved_job] from a previous round. Do you want to continue as that saved character?", "Saved character", "Use saved state", "Start fresh")
 		use_save = (choice == "Use saved state")
-		if(use_save && CS.job_title && SSjob.GetJob(CS.job_title))
-			rank = CS.job_title
+	if(!has_save)
+		use_save = FALSE
+	if(use_save && CS.job_title && SSjob.GetJob(CS.job_title))
+		rank = CS.job_title
 
 	SSjob.AssignRole(src, rank, 1)
 
