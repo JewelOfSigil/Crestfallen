@@ -79,7 +79,7 @@
 	// Implemented with AI architecting.
 	var/datum/character_save/depart_save = new /datum/character_save()
 	if(!depart_save.save_character(departing_mob))
-		log_admin("Persistence: failed to save [departing_mob.real_name] ([departing_mob.ckey]) on Far Travel.")
+		log_admin("Persistence: failed to save [departing_mob.real_name] ([departing_mob.ckey]) on Far Travel. Reason: [depart_save.save_error].")
 		to_chat(user, "<span class='warning'>Warning: [departing_mob] could not be saved and may not return.</span>")
 	if(departing_mob.mind)
 		departing_mob.mind.unknow_all_people()

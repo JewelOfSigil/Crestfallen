@@ -29,6 +29,10 @@
 // — every status effect checked is a short timer, or is derived from the
 // saved hunger/thirst stages, whose debuffs re-derive on life ticks).
 //
+// A failed save is logged in the admin log, and — once the character is
+// identified — in save_errors.log inside that character's save folder, so
+// the failure sits next to the save it belongs to.
+//
 // The load path (apply_to) is NOT wired into the live spawn path yet. It is
 // built parallel to copy_to(): appearance and species come from the save,
 // stats and skills are applied as saved final values (no re-roll), and job
@@ -138,6 +142,8 @@
 	var/home_area_type
 	// Treasury. Plain text, never a reference.
 	var/primary_treasury_id = ""
+	// Why the last save failed, for the logs. Empty when the last save worked.
+	var/save_error = ""
 
 // The file name for a character: lowercase, letters and digits only.
 // Falls back to "character" if nothing survives the filter.
@@ -168,16 +174,32 @@
 		return FALSE
 	return fexists(save_path(save_ckey, character_name))
 
+// Record a failed save in the character's own save folder, so the failure
+// is visible next to the save it belongs to (and not only in the admin
+// log). Only possible once the ckey and name are known — a failure before
+// that has no folder to write to, and stays admin-log only. The reason is
+// kept on the datum too, so callers can include it in the admin log.
+/datum/character_save/proc/note_save_error(reason)
+	save_error = reason
+	if(!ckey || !real_name)
+		return
+	var/folder = character_save_filename(real_name)
+	var/log_path = "data/player_saves/[copytext(ckey, 1, 2)]/[ckey]/[folder]/save_errors.log"
+	var/stamp = time2text(world.realtime, "YYYY-MM-DD hh:mm:ss")
+	text2file("[stamp] Save failed: [reason]\n", log_path)
+
 // Save a character as they are, living or dead. The dead-refusal belongs to
 // the Far Travel hook, not here: the restart and test-verb saves need dead
 // characters saved exactly as they are, where they are.
 /datum/character_save/proc/save_character(mob/living/carbon/human/H)
 	if(!H || !H.real_name)
+		save_error = "no character or no name"
 		return FALSE
 	var/save_ckey = H.ckey
 	if(!save_ckey && H.mind?.key)
 		save_ckey = ckey(H.mind.key)
 	if(!save_ckey)
+		save_error = "no ckey"
 		return FALSE
 
 	// Identity.
@@ -315,6 +337,7 @@
 		fcopy(path, backup_path(save_ckey, real_name))
 	var/savefile/S = new /savefile(path)
 	if(!S)
+		note_save_error("could not open savefile at [path]")
 		return FALSE
 	S.cd = "/"
 	WRITE_FILE(S["version"], CHARACTER_SAVE_VERSION_MAX)
@@ -684,7 +707,7 @@
 			saved++
 		else
 			failed++
-			log_admin("Persistence: failed to save [H.real_name] ([H.ckey]) during a manual save.")
+			log_admin("Persistence: failed to save [H.real_name] ([H.ckey]) during a manual save. Reason: [CS.save_error].")
 	return list("saved" = saved, "failed" = failed)
 
 // World-save entry point. Prototype 2 implements the world save; until then

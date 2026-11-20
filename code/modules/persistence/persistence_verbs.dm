@@ -35,6 +35,7 @@ GLOBAL_VAR_INIT(persistence_test_save_running, FALSE)
 	SSticker.late_join_disabled = was_disabled
 	message_admins("Persistence: Test World Save crashed mid-run. Joining has been re-enabled automatically; the save is incomplete and must be re-run.")
 	log_admin("Persistence: Test World Save watchdog re-enabled joining after a crashed save.")
+	log_world("Persistence: Test World Save watchdog re-enabled joining after a crashed save.")
 
 /client/proc/cmd_admin_test_world_save()
 	set category = "Server"
