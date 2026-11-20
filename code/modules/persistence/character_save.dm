@@ -79,6 +79,16 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// when doing so.
 	var/list/character_save_status_whitelist = list()
 
+	// Trait sources that belong to the character, not to a passing moment.
+	// Only traits carrying one of these sources are saved; a trait from a
+	// spell, a drink, a status effect, or worn gear is left out, since the
+	// load re-derives those or they should not persist. TRAIT_GENERIC is
+	// deliberately not here — it is the catch-all, used for passing grants
+	// as well as lasting ones.
+	var/static/list/character_save_trait_sources = list(
+		JOB_TRAIT, TRAIT_VIRTUE, SPECIES_TRAIT, ROUNDSTART_TRAIT, TRAIT_CURSE,
+	)
+
 	var/ckey
 	var/slot = 1 // Preferences-slot link only. Not the file key.
 	var/real_name
@@ -114,6 +124,9 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/job_title
 	var/advjob
 	var/advclass_type
+	// Traits: trait name -> list of sources, as the mob had them, lasting
+	// sources only (see character_save_trait_sources above).
+	var/list/traits = list()
 	// Inventory: recursive entries of list("type", "slot", "contents").
 	// Slot is a SLOT_* number for worn items, SLOT_HANDS for held items,
 	// 0 for items inside another item (or with no slot).
@@ -261,6 +274,18 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	advjob = H.advjob
 	advclass_type = H.mind?.picked_advclass?.type
 
+	// Traits, lasting sources only. The map is copied, not aliased: the
+	// mob's live list must not be reachable from the save datum.
+	traits = list()
+	if(H.status_traits)
+		for(var/trait in H.status_traits)
+			var/list/kept_sources = list()
+			for(var/source in H.status_traits[trait])
+				if(istext(source) && (source in character_save_trait_sources))
+					kept_sources += source
+			if(length(kept_sources))
+				traits[trait] = kept_sources
+
 	// Inventory, recursive. Bodyparts and organs are body, not inventory,
 	// and restraints are transient — none of them are saved as items.
 	inventory = list()
@@ -377,6 +402,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["job_title"], job_title)
 	WRITE_FILE(S["advjob"], advjob)
 	WRITE_FILE(S["advclass_type"], advclass_type)
+	WRITE_FILE(S["traits"], traits)
 	WRITE_FILE(S["inventory"], inventory)
 	WRITE_FILE(S["bodyparts"], bodyparts)
 	WRITE_FILE(S["organs"], organs)
@@ -473,6 +499,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	S["job_title"] >> job_title
 	S["advjob"] >> advjob
 	S["advclass_type"] >> advclass_type
+	S["traits"] >> traits
 	S["inventory"] >> inventory
 	S["bodyparts"] >> bodyparts
 	S["organs"] >> organs
@@ -585,6 +612,32 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		H.advjob = advjob
 	if(advclass_type && ispath(advclass_type, /datum/advclass) && H.mind)
 		H.mind.picked_advclass = new advclass_type
+
+	// Traits, authoritatively: the saved set is what the character had,
+	// so it wins over anything the fresh human gained from the slot. First
+	// drop any lasting-sourced trait the fresh human has that the save
+	// does not list (a virtue changed in the slot since the save, for
+	// instance); then add every saved trait with its saved sources.
+	// Passing-sourced traits are left alone — the load re-derives those
+	// or they should not persist. Old saves have no traits field, so this
+	// whole block is skipped for them.
+	if(length(traits))
+		if(H.status_traits)
+			for(var/trait in H.status_traits.Copy())
+				if(traits[trait])
+					continue
+				var/list/sources = H.status_traits[trait]
+				var/all_lasting = TRUE
+				for(var/source in sources)
+					if(!istext(source) || !(source in character_save_trait_sources))
+						all_lasting = FALSE
+						break
+				if(all_lasting)
+					REMOVE_TRAIT(H, trait, null)
+					REMOVE_TRAIT(H, trait, ROUNDSTART_TRAIT)
+		for(var/trait in traits)
+			for(var/source in traits[trait])
+				ADD_TRAIT(H, trait, source)
 
 	// Health: drop limbs the save does not have, then restore damage
 	// and wounds on the limbs it does have.
