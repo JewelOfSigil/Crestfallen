@@ -300,10 +300,10 @@
 	major_aspect_types = list()
 	minor_aspect_types = list()
 	if(H.mind)
-		// Untyped loop var on purpose: spells here are
-		// /obj/effect/proc_holder/spell objects, not /datum/spell.
-		for(var/spell in H.mind.spell_list)
-			spell_types += spell.type
+		// Spells are /obj/effect/proc_holder/spell objects, not /datum/spell,
+		// so the loop var is typed to the real type.
+		for(var/obj/effect/proc_holder/spell/S in H.mind.spell_list)
+			spell_types += S.type
 		for(var/datum/magic_aspect/A in H.mind.major_aspects)
 			major_aspect_types += A.type
 		for(var/datum/magic_aspect/A in H.mind.minor_aspects)
