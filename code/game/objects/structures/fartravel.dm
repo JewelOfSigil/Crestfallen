@@ -24,6 +24,11 @@
 		return
 	var/mob/living/carbon/human/departing_mob = dropping
 	var/datum/job/mob_job
+	// Persistence (Prototype 1): the dead cannot depart, by themselves or by
+	// another's hand. Implemented with AI architecting.
+	if(departing_mob.stat == DEAD)
+		to_chat(user, "<span class='warning'>The dead cannot depart. [departing_mob] must remain here.</span>")
+		return
 	if(departing_mob != user && departing_mob.client)
 		to_chat(user, "<span class='warning'>This one retains their free will. It's their choice if they want to leave the round or not.</span>")
 		return
@@ -69,6 +74,13 @@
 			content = departing_mob.contents[i]
 			dat += ", [content.name]"
 		dat += "."
+	// Persistence (Prototype 1): save the departing character before the
+	// cleanup below removes their bounties, bank account, and mob.
+	// Implemented with AI architecting.
+	var/datum/character_save/depart_save = new /datum/character_save()
+	if(!depart_save.save_character(departing_mob))
+		log_admin("Persistence: failed to save [departing_mob.real_name] ([departing_mob.ckey]) on Far Travel.")
+		to_chat(user, "<span class='warning'>Warning: [departing_mob] could not be saved and may not return.</span>")
 	if(departing_mob.mind)
 		departing_mob.mind.unknow_all_people()
 		for(var/datum/mind/MF in get_minds())

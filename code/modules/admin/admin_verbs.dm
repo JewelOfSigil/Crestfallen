@@ -189,7 +189,8 @@ GLOBAL_PROTECT(admin_verbs_server)
 	/datum/admins/proc/admin_add_donator_verb,
 	/datum/admins/proc/admin_remove_donator_verb,
 	/client/proc/toggle_hub,
-	/client/proc/download_player_save
+	/client/proc/download_player_save,
+	/client/proc/cmd_admin_test_world_save // Persistence (Prototype 1): Test World Save verb. Implemented with AI architecting.
 	)
 GLOBAL_LIST_INIT(admin_verbs_debug, world.AVerbsDebug())
 GLOBAL_PROTECT(admin_verbs_debug)
