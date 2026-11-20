@@ -9,6 +9,13 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 
 /mob/dead/new_player
 	var/ready = 0
+	// Implemented with AI architecting.
+	// Persistence: the roundstart saved-state choice, remembered for the
+	// round. Set when the player readies up as a character with a save;
+	// cleared on unready, and only honoured if the same character is
+	// still selected at roundstart.
+	var/use_saved_state = FALSE
+	var/saved_state_character = ""
 	var/spawning = 0//Referenced when you want to delete the new_player later on in the code.
 	var/topjob = "Hero!"
 	flags_1 = NONE
@@ -96,9 +103,28 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 				if(length(client.prefs.ooc_notes) < MINIMUM_OOC_NOTES)
 					to_chat(src, span_boldwarning("You need at least a few words in your OOC notes in order to play."))
 					return
+				// Implemented with AI architecting.
+				// Persistence: if this character has a saved state, ask
+				// whether to use it at roundstart. Only asked when
+				// actually transitioning to ready; the answer is
+				// remembered on the lobby player for the round.
+				if(ready != PLAYER_READY_TO_PLAY)
+					use_saved_state = FALSE
+					saved_state_character = ""
+					var/datum/character_save/CS = new /datum/character_save()
+					if(CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name))
+						var/saved_job = CS.job_title ? " ([CS.job_title])" : ""
+						var/choice = alert(src, "A saved state exists for [CS.real_name][saved_job] from a previous round. Do you want to continue as that saved character?", "Saved character", "Use saved state", "Start fresh")
+						use_saved_state = (choice == "Use saved state")
+						saved_state_character = CS.real_name
 
 			if(ready != tready)
 				ready = tready
+				if(tready != PLAYER_READY_TO_PLAY)
+					// Persistence: unreadying forgets the saved-state
+					// answer; readying up again asks anew.
+					use_saved_state = FALSE
+					saved_state_character = ""
 				if(tready != PLAYER_READY_TO_PLAY && SSvote.mode)
 					SSvote.remove_vote_for_ckey(ckey)
 					SSvote.show_vote(client)
@@ -343,26 +369,56 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 	SSticker.queued_players -= src
 	SSticker.queue_delay = 4
 
+	// Implemented with AI architecting.
+	// Persistence: if this character has a saved state, ask the player
+	// whether to use it. The saved job wins over the picked rank, since
+	// the save IS the character. Assumes the created human's real_name
+	// equals the active slot name (client.prefs.real_name); forced random
+	// names are out of scope for Prototype 1.
+	var/use_save = FALSE
+	var/datum/character_save/CS = new /datum/character_save()
+	if(CS.character_save_exists(ckey, client.prefs.real_name) && CS.load_character(ckey, client.prefs.real_name))
+		var/saved_job = CS.job_title ? " ([CS.job_title])" : ""
+		var/choice = alert(src, "A saved state exists for [CS.real_name][saved_job] from a previous round. Do you want to continue as that saved character?", "Saved character", "Use saved state", "Start fresh")
+		use_save = (choice == "Use saved state")
+		if(use_save && CS.job_title && SSjob.GetJob(CS.job_title))
+			rank = CS.job_title
+
 	SSjob.AssignRole(src, rank, 1)
 
 	var/mob/living/character = create_character(TRUE)	//creates the human and transfers vars and mind
 
 	character.islatejoin = TRUE
-	var/equip = SSjob.EquipRank(character, rank, TRUE)
+	var/loaded = FALSE
+	if(use_save && ishuman(character))
+		var/mob/living/carbon/human/loaded_human
+		loaded_human = character
+		loaded = CS.apply_to(loaded_human)
+	if(loaded)
+		// The save replaces equip and placement (apply_to forceMoves to
+		// the saved location), so skip both EquipRank and SendToLateJoin.
+	else
+		if(use_save)
+			// src (the lobby mob) is already qdeleted by this point —
+			// create_character(TRUE) transfers the key and qdels it —
+			// so the warning goes to the character, who holds the client.
+			to_chat(character, span_warning("Your saved state could not be loaded, so you are joining fresh instead."))
+			log_admin("Persistence: failed to apply the saved state for [character.real_name] ([character.ckey]) on latejoin; joining fresh instead.")
+		var/equip = SSjob.EquipRank(character, rank, TRUE)
 
 
-	if(isliving(equip))	//Borgs get borged in the equip, so we need to make sure we handle the new mob.
-		character = equip
+		if(isliving(equip))	//Borgs get borged in the equip, so we need to make sure we handle the new mob.
+			character = equip
 
-	var/datum/job/job = SSjob.GetJob(rank)
+		var/datum/job/job = SSjob.GetJob(rank)
 
 
-	if(job && !job.override_latejoin_spawn(character))
+		if(job && !job.override_latejoin_spawn(character))
 
-		SSjob.SendToLateJoin(character)
+			SSjob.SendToLateJoin(character)
 
-		var/atom/movable/screen/splash/Spl = new(character.client, TRUE)
-		Spl.Fade(TRUE)
+			var/atom/movable/screen/splash/Spl = new(character.client, TRUE)
+			Spl.Fade(TRUE)
 
 
 	SSticker.minds += character.mind

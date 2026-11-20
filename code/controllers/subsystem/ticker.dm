@@ -479,7 +479,27 @@ SUBSYSTEM_DEF(ticker)
 	sortTim(valid_characters, GLOBAL_PROC_REF(cmp_assignedrole_dsc))
 	for(var/mob/character as anything in valid_characters)
 		var/mob/new_player = valid_characters[character]
-		SSjob.EquipRank(new_player, character.mind.assigned_role, joined_late = FALSE)
+		// Implemented with AI architecting.
+		// Persistence: if the lobby player asked to use a saved state for
+		// this character, load it instead of equipping. The load replaces
+		// equip, including placement (apply_to forceMoves to the saved
+		// location). Any failure falls back to the normal equip.
+		var/loaded = FALSE
+		var/mob/dead/new_player/lobby_player
+		var/mob/living/carbon/human/loaded_human
+		if(istype(new_player, /mob/dead/new_player))
+			lobby_player = new_player
+		if(ishuman(character))
+			loaded_human = character
+		if(lobby_player && loaded_human && lobby_player.use_saved_state && lobby_player.saved_state_character == character.real_name)
+			var/datum/character_save/CS = new /datum/character_save()
+			if(CS.load_character(lobby_player.ckey, character.real_name))
+				loaded = CS.apply_to(loaded_human)
+			if(!loaded)
+				log_admin("Persistence: failed to load the saved state for [character.real_name] ([lobby_player.ckey]) at roundstart; joining with fresh starting gear instead.")
+				to_chat(lobby_player, span_warning("Your saved state could not be loaded, so you are joining with fresh starting gear instead."))
+		if(!loaded)
+			SSjob.EquipRank(new_player, character.mind.assigned_role, joined_late = FALSE)
 		CHECK_TICK
 
 /datum/controller/subsystem/ticker/proc/transfer_characters()
