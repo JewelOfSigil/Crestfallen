@@ -84,9 +84,12 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// spell, a drink, a status effect, or worn gear is left out, since the
 	// load re-derives those or they should not persist. TRAIT_GENERIC is
 	// deliberately not here — it is the catch-all, used for passing grants
-	// as well as lasting ones.
+	// as well as lasting ones. ADVENTURER_TRAIT is in: it is used only for
+	// a class's traits_applied grant in advclass equipme, so it is lasting
+	// character state, not a passing grant.
 	var/static/list/character_save_trait_sources = list(
 		JOB_TRAIT, TRAIT_VIRTUE, SPECIES_TRAIT, ROUNDSTART_TRAIT, TRAIT_CURSE,
+		ADVENTURER_TRAIT,
 	)
 
 	var/ckey
