@@ -24,8 +24,8 @@
 // Deliberately not saved in version 1: transient runtime state, antagonist
 // (villain) roles and special roles (round-scoped), starting gear and
 // roundstart stash replenishment (the job equip step never runs on load),
-// per-item state such as durability, quality, reagents, and coin amounts
-// (version 2), and status effects (the whitelist below is empty in version 1
+// per-item state such as durability, quality, and reagents (version 2;
+// coin amounts ARE saved, see save_item), and status effects (the whitelist below is empty in version 1
 // — every status effect checked is a short timer, or is derived from the
 // saved hunger/thirst stages, whose debuffs re-derive on life ticks).
 //
@@ -402,12 +402,16 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["primary_treasury_id"], primary_treasury_id)
 	return TRUE
 
-// One item, recursively. Typepath + slot + contents only in version 1.
-// Per-item state (durability, quality, reagents, coin amounts) is version 2.
+// One item, recursively. Typepath + slot + contents, plus coin quantity
+// for coin piles (a pile's amount is money, and money must survive the
+// load). Other per-item state (durability, quality, reagents) is version 2.
 /datum/character_save/proc/save_item(mob/living/carbon/human/H, obj/item/I)
 	var/list/entry = list()
 	entry["type"] = I.type
 	entry["slot"] = get_item_slot(H, I)
+	if(istype(I, /obj/item/roguecoin))
+		var/obj/item/roguecoin/C = I
+		entry["quantity"] = C.quantity
 	var/list/kids = list()
 	for(var/obj/item/K in I.contents)
 		kids += list(save_item(H, K))
@@ -693,7 +697,15 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		var/item_type = entry["type"]
 		if(!ispath(item_type, /obj/item))
 			continue
-		var/obj/item/I = new item_type(H.loc)
+		// Coin piles carry their amount: the coin type takes it as a
+		// second Initialize argument, so a restored pile is worth what
+		// was saved. Saves made before this field existed simply omit
+		// it, and the pile comes back as a single coin.
+		var/obj/item/I
+		if(ispath(item_type, /obj/item/roguecoin) && entry["quantity"])
+			I = new item_type(H.loc, entry["quantity"])
+		else
+			I = new item_type(H.loc)
 		// A container can fill itself in Initialize() — a pre-packed box,
 		// a stocked pouch — and the save already records the exact
 		// contents it had, so anything already inside a freshly created

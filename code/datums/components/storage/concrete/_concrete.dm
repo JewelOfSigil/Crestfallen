@@ -104,8 +104,20 @@
 	thing.layer = initial(thing.layer)
 	thing.plane = initial(thing.plane)
 	thing.mouse_opacity = initial(thing.mouse_opacity)
+	thing.screen_loc = null
 	if(thing.maptext)
 		thing.maptext = ""
+	// Implemented with AI architecting.
+	// Persistence: an item leaving storage must stop carrying its
+	// in-container state with it. The IN_STORAGE flag was only cleared
+	// when the container sat on a mob, so a pile taken out of a container
+	// on the ground kept it — and the reset above already promised to
+	// clear the screen position but never did, so a removed item could
+	// keep rendering at its container grid cell. Clearing both here, on
+	// every removal path, keeps a restored item honest once it leaves.
+	if(isitem(thing))
+		var/obj/item/I = thing
+		I.item_flags &= ~IN_STORAGE
 
 /datum/component/storage/concrete/remove_from_storage(atom/movable/AM, atom/new_location)
 	//Cache this as it should be reusable down the bottom, will not apply if anyone adds a sleep to dropped
