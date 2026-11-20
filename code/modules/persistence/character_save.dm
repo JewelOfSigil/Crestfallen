@@ -33,7 +33,7 @@
 // built parallel to copy_to(): appearance and species come from the save,
 // stats and skills are applied as saved final values (no re-roll), and job
 // equip is never run. Wire it into new_player.dm only once the save
-// round-trips cleanly on Roguetest.
+// round-trips cleanly on Dun World.
 //
 // This code has not been compiled: BYOND cannot run on this machine.
 // Compile it locally with DreamMaker (BYOND 516.1687, the version the repo
