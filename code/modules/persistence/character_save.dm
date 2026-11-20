@@ -697,8 +697,12 @@
 			restore_inventory(H, kids, I)
 
 // Save every human currently in the round, as they are (including the dead,
-// mirroring the restart save). Returns list("saved" = n, "failed" = n).
+// mirroring the restart save). Returns list("saved" = n, "failed" = n,
+// "duration_ds" = deciseconds). Timed with world.realtime, not world.time:
+// world.time only advances once per tick, so a save that finishes inside
+// one tick would read as taking no time at all.
 /proc/persistence_save_all_characters()
+	var/start = world.realtime
 	var/saved = 0
 	var/failed = 0
 	for(var/mob/living/carbon/human/H in GLOB.human_list)
@@ -708,7 +712,7 @@
 		else
 			failed++
 			log_admin("Persistence: failed to save [H.real_name] ([H.ckey]) during a manual save. Reason: [CS.save_error].")
-	return list("saved" = saved, "failed" = failed)
+	return list("saved" = saved, "failed" = failed, "duration_ds" = world.realtime - start)
 
 // World-save entry point. Prototype 2 implements the world save; until then
 // this reports as not yet implemented instead of failing silently.

@@ -20,6 +20,9 @@
 //
 // The world-save half is implemented by Prototype 2. Until then the verb
 // reports it as not yet implemented instead of failing silently.
+//
+// The verb reports how long the save took (characters and world separately),
+// so save times can be compared as the player count and the world grow.
 
 // TRUE while a manual Test World Save is running. The watchdog reads it.
 GLOBAL_VAR_INIT(persistence_test_save_running, FALSE)
@@ -62,12 +65,16 @@ GLOBAL_VAR_INIT(persistence_test_save_running, FALSE)
 	spawn(1)
 		persistence_test_save_watchdog(was_disabled)
 	var/list/result = persistence_save_all_characters()
+	var/world_start = world.realtime
 	var/world_saved = persistence_save_world()
+	var/world_duration_ds = world.realtime - world_start
 	GLOB.persistence_test_save_running = FALSE
 	SSticker.late_join_disabled = was_disabled
 
-	var/world_text = world_saved ? "saved" : "not yet implemented (Prototype 2)"
-	var/msg = "Test World Save complete: [result["saved"]] character(s) saved, [result["failed"]] failed. World save: [world_text]."
+	var/char_seconds = round(result["duration_ds"] / 10, 0.1)
+	var/world_seconds = round(world_duration_ds / 10, 0.1)
+	var/world_text = world_saved ? "saved in [world_seconds]s" : "not yet implemented (Prototype 2)"
+	var/msg = "Test World Save complete: [result["saved"]] character(s) saved, [result["failed"]] failed in [char_seconds]s. World save: [world_text]."
 	to_chat(usr, span_notice(msg))
-	message_admins("Admin [key_name_admin(usr)] ran Test World Save: [result["saved"]] character(s) saved, [result["failed"]] failed. World save: [world_text]. Joining was disabled during the save and has been restored.")
-	log_admin("[key_name(usr)] ran Test World Save: [result["saved"]] saved, [result["failed"]] failed, world [world_text].")
+	message_admins("Admin [key_name_admin(usr)] ran Test World Save: [result["saved"]] character(s) saved, [result["failed"]] failed in [char_seconds]s. World save: [world_text]. Joining was disabled during the save and has been restored.")
+	log_admin("[key_name(usr)] ran Test World Save: [result["saved"]] saved, [result["failed"]] failed in [char_seconds]s, world [world_text].")
