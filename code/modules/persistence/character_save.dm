@@ -816,6 +816,28 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		// suppress flag above stops that half.)
 		for(var/obj/item/C in I.contents.Copy())
 			qdel(C)
+		// Dye-station colours, as saved: set them before the item is
+		// placed or equipped, so the worn overlay is built with the
+		// saved colours. The mob's worn icon is built at equip from
+		// the item's current colour and detail colours, and it is not
+		// rebuilt when the colours change afterwards — so a dye set
+		// after the equip showed on the item's own icon (the inventory
+		// panel) but the player sprite kept the undyed colour until
+		// the item was taken off and put back on. The primary dye goes
+		// back through add_atom_colour at the FIXED priority, exactly
+		// as the dye station applied it, and the detail colours are
+		// plain vars. Saves made before these fields existed omit
+		// them, and the item keeps whatever colour it was created with.
+		var/dyed = FALSE
+		if(entry["dye_color"])
+			I.add_atom_colour(entry["dye_color"], FIXED_COLOUR_PRIORITY)
+			dyed = TRUE
+		if(entry["detail_color"])
+			I.detail_color = entry["detail_color"]
+			dyed = TRUE
+		if(entry["altdetail_color"])
+			I.altdetail_color = entry["altdetail_color"]
+			dyed = TRUE
 		if(parent)
 			I.forceMove(parent)
 			// Grid position, as saved (or the first free cell when the
@@ -836,23 +858,8 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		var/list/kids = entry["contents"]
 		if(length(kids))
 			restore_inventory(H, kids, I)
-		// Dye-station colours, as saved: the primary dye goes back
-		// through add_atom_colour at the FIXED priority, exactly as the
-		// dye station applied it, and the detail colours are plain vars.
-		// Saves made before these fields existed omit them, and the item
-		// keeps whatever colour it was created with. The icon is rebuilt
-		// only for dyed items, after the contents are restored, so the
-		// detail overlays use the saved colours.
-		var/dyed = FALSE
-		if(entry["dye_color"])
-			I.add_atom_colour(entry["dye_color"], FIXED_COLOUR_PRIORITY)
-			dyed = TRUE
-		if(entry["detail_color"])
-			I.detail_color = entry["detail_color"]
-			dyed = TRUE
-		if(entry["altdetail_color"])
-			I.altdetail_color = entry["altdetail_color"]
-			dyed = TRUE
+		// The icon is rebuilt only for dyed items, after the contents
+		// are restored, so the detail overlays use the saved colours.
 		if(dyed)
 			I.update_icon()
 
