@@ -147,6 +147,12 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/list/status_effects = list()
 	// Magic and religion: typepaths.
 	var/list/spell_types = list()
+	// Spell types learned by spending utility points (their spell datum
+	// carries utility_learned = TRUE). The points-spent total is derived
+	// from that flag, so it has to survive the reload too, or the
+	// restored spell would not count against the budget and its points
+	// could be spent again.
+	var/list/utility_learned_types = list()
 	var/list/major_aspect_types = list()
 	var/list/minor_aspect_types = list()
 	// Spellpoint choices: the mage aspect config (mastery, major, minor,
@@ -345,6 +351,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 
 	// Magic and religion.
 	spell_types = list()
+	utility_learned_types = list()
 	major_aspect_types = list()
 	minor_aspect_types = list()
 	mage_aspect_config = list()
@@ -368,6 +375,14 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			if(istype(S, /datum/action/cooldown/spell/learnspell))
 				continue
 			spell_types += S.type
+			// Whether the spell was learned by spending utility points.
+			// The points-spent total is derived from this flag, so a
+			// restored spell without it would not count against the
+			// budget and its points could be spent again.
+			if(istype(S, /datum/action/cooldown/spell))
+				var/datum/action/cooldown/spell/AS = S
+				if(AS.utility_learned)
+					utility_learned_types += S.type
 		for(var/datum/magic_aspect/A in H.mind.major_aspects)
 			major_aspect_types += A.type
 		for(var/datum/magic_aspect/A in H.mind.minor_aspects)
@@ -455,6 +470,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["blood_volume"], blood_volume)
 	WRITE_FILE(S["status_effects"], status_effects)
 	WRITE_FILE(S["spell_types"], spell_types)
+	WRITE_FILE(S["utility_learned_types"], utility_learned_types)
 	WRITE_FILE(S["major_aspect_types"], major_aspect_types)
 	WRITE_FILE(S["minor_aspect_types"], minor_aspect_types)
 	WRITE_FILE(S["mage_aspect_config"], mage_aspect_config)
@@ -584,6 +600,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	S["blood_volume"] >> blood_volume
 	S["status_effects"] >> status_effects
 	S["spell_types"] >> spell_types
+	S["utility_learned_types"] >> utility_learned_types
 	S["major_aspect_types"] >> major_aspect_types
 	S["minor_aspect_types"] >> minor_aspect_types
 	S["mage_aspect_config"] >> mage_aspect_config
@@ -792,6 +809,13 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			if(!ispath(spell_type))
 				continue
 			var/datum/new_spell = new spell_type
+			// Restore whether the spell was learned by spending utility
+			// points, before granting it: the points-spent total is
+			// derived from that flag, and a fresh spell defaults to
+			// FALSE, which would leave its points spendable again.
+			if(istype(new_spell, /datum/action/cooldown/spell) && (spell_type in utility_learned_types))
+				var/datum/action/cooldown/spell/new_action_spell = new_spell
+				new_action_spell.utility_learned = TRUE
 			H.mind.AddSpell(new_spell, H)
 		for(var/aspect_type in major_aspect_types)
 			if(!ispath(aspect_type, /datum/magic_aspect))
