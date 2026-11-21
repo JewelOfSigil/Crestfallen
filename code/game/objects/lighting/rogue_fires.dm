@@ -638,7 +638,12 @@
 		burn_out()
 
 /obj/machinery/light/rogue/hearth/Destroy()
-	QDEL_NULL(boilloop)
+	// Implemented with AI architecting: boilloop is null until
+	// Initialize() creates it, and QDEL_NULL does not null-check, so
+	// a hearth deleted before Initialize() (as the world-load atom
+	// clear does) would qdel null and runtime.
+	if(boilloop)
+		QDEL_NULL(boilloop)
 	. = ..()
 
 /obj/machinery/light/rogue/hearth/mobilestove // thanks to Reen and Ppooch for their help on this. If any of this is slopcode, its my slopcode, not theirs. They only made improvements.
@@ -744,7 +749,12 @@
 	. = ..()
 
 /obj/machinery/light/rogue/campfire/Destroy()
-	QDEL_NULL(boilloop)
+	// Implemented with AI architecting: boilloop is null until
+	// Initialize() creates it, and QDEL_NULL does not null-check, so
+	// a campfire deleted before Initialize() (as the world-load atom
+	// clear does) would qdel null and runtime.
+	if(boilloop)
+		QDEL_NULL(boilloop)
 	. = ..()
 
 /obj/machinery/light/rogue/campfire/seton(s)

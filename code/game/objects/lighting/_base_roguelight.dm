@@ -80,7 +80,14 @@
 		GLOB.fires_list -= src
 
 /obj/machinery/light/rogue/Destroy()
-	QDEL_NULL(soundloop)
+	// Implemented with AI architecting: soundloop is a typepath until
+	// Initialize() turns it into an instance, so a light deleted
+	// before Initialize() (as the world-load atom clear does) would
+	// qdel a typepath and runtime. Only qdel it when it is a datum.
+	if(isdatum(soundloop))
+		QDEL_NULL(soundloop)
+	else
+		soundloop = null
 	GLOB.fires_list -= src
 	. = ..()
 
