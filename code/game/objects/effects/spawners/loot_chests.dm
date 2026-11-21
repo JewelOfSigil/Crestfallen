@@ -28,11 +28,21 @@
 /obj/structure/closet/crate/chest/loot_chest/proc/spawn_junk()
 	if(!junk_loot || !length(junk_loot))
 		return
+	// Persistence: only replenish if the chest is empty. If it still
+	// holds its saved contents, spawning junk on top would accumulate
+	// it endlessly. Implemented with AI architecting.
+	if(length(contents))
+		return
 	var/junk_type = pickweight(junk_loot)
 	new junk_type(src)
 
 /// Actually generate chest contents from the weighted spawner list
 /obj/structure/closet/crate/chest/loot_chest/proc/generate_loot()
+	// Persistence: only replenish if the chest is empty. If it still
+	// holds its saved contents, generating again would accumulate
+	// loot endlessly. Implemented with AI architecting.
+	if(length(contents))
+		return
 	var/random_loot_amount = roll(loot_spawn_dice_string)
 	for(var/loot_spawn in 1 to random_loot_amount)
 		var/obj/new_loot = pickweight(loot_weighted_list)

@@ -33,9 +33,31 @@
 /obj/effect/spawner/lootdrop/LateInitialize()
 	return
 
+/// Whether this spawner should fire, given the loot already present.
+/// Persistence: a spawner only replenishes loot that was taken. If the
+/// spawner is inside a container, it fires only when that container is
+/// empty; if it is on a turf, it fires only when there are no items on
+/// that turf. Otherwise the saved loot is already there, and spawning
+/// again would accumulate it endlessly. Implemented with AI
+/// architecting.
+/obj/effect/spawner/lootdrop/proc/should_spawn()
+	if(!isturf(loc))
+		// Inside a container: fire only if the container is empty.
+		var/atom/container = loc
+		return !length(container.contents)
+	var/turf/T = loc
+	if(!T)
+		return FALSE
+	// On a turf: fire only if there are no items on the turf.
+	for(var/obj/item/I in T)
+		return FALSE
+	return TRUE
+
 /// Spawns items from the loot table at this spawner's location
 /obj/effect/spawner/lootdrop/proc/spawn_loot()
 	if(!loot || !loot.len)
+		return
+	if(!should_spawn())
 		return
 	var/turf/T = loc
 	var/loot_spawned = 0
@@ -66,6 +88,8 @@
 /// Called by the pool when this spawner loses the budget lottery - spawns junk from its own junk_loot list
 /obj/effect/spawner/lootdrop/proc/spawn_junk()
 	if(!junk_loot || !length(junk_loot))
+		return
+	if(!should_spawn())
 		return
 	var/turf/T = loc
 	if(T)

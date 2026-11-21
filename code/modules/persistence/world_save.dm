@@ -42,10 +42,11 @@
 //   before its saved values are applied. Atom identity is not
 //   preserved across the reboot, which is fine at boot — no mob holds
 //   references yet, and machines re-register when created.
-// - Do NOT save (and do not recreate): loot spawners (they fire at
-//   round start; the saved loot is already restored, so the spawners
-//   are removed on load and must not fire again), landmarks, and
-//   mapping helpers (they self-delete after loading).
+// - Do NOT save (and do not recreate): loot spawners (they stay on
+//   the map from the fresh map and fire again only if the loot was
+//   taken — see the spawner's own should_spawn check — so loot
+//   replenishes on restart instead of accumulating endlessly),
+//   landmarks, and mapping helpers (they self-delete after loading).
 // - Mobs are NOT saved here: player characters have their own
 //   character saves, and spawned NPC mobs are designed to despawn
 //   (they reset each round).
@@ -344,10 +345,9 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 			return FALSE
 		z_data["[z]"] = data
 	// All valid. Remove the in-scope atoms first, so the saved atoms
-	// are not duplicated on top of the fresh map's. Landmarks and
-	// mapping helpers are left alone (they self-delete after loading);
-	// loot spawners are removed with the rest, so they do not fire
-	// again on top of the saved loot.
+	// are not duplicated on top of the fresh map's. Landmarks are
+	// left alone (they self-delete after loading), and loot spawners
+	// are left alone so they can replenish taken loot.
 	persistence_world_clear_atoms()
 	// Suppress container population while the atoms are rebuilt, so a
 	// restored container does not fill itself with its defaults on
@@ -418,11 +418,13 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 
 // Remove every in-scope atom on the map's z-levels, so the saved
 // atoms can be recreated without duplicating the fresh map's.
-// Landmarks and mapping helpers are left alone; loot spawners are
-// removed with the rest, so they do not fire again on top of the
-// saved loot. Contents are removed first, so nothing is orphaned.
-// Atoms are collected first and deleted after, so deleting does not
-// disturb the iteration.
+// Landmarks and loot spawners are left alone: landmarks self-delete
+// after loading, and loot spawners stay on the map so they can fire
+// again if the loot was taken (their own should_spawn check decides;
+// the saved loot is already restored, so a spawner whose loot is
+// still there simply does not fire). Contents are removed first, so
+// nothing is orphaned. Atoms are collected first and deleted after,
+// so deleting does not disturb the iteration.
 /proc/persistence_world_clear_atoms()
 	var/list/zs = persistence_world_map_zs()
 	var/list/to_delete = list()
@@ -432,6 +434,8 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 		if(!isturf(O.loc))
 			continue
 		if(istype(O, /obj/effect/landmark))
+			continue
+		if(istype(O, /obj/effect/spawner/lootdrop))
 			continue
 		to_delete += O
 	for(var/obj/O in to_delete)
