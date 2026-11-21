@@ -23,11 +23,17 @@
 	// A character who has learned spells by spending points gets one use
 	// of this action per character load, so they can change their prepared
 	// spells even after their picks are spent and without the spellbook.
-	// The grant is consumed when the picker is opened.
+	// The grant is spent only once a change is actually made, so the
+	// action does not consume it here — it records that this picker
+	// session used the grant, and the picker spends it when the change
+	// is confirmed.
+	var/use_load_grant = FALSE
 	if(!user.mind.has_remaining_aspect_picks())
 		if(!user.mind.load_learnspell_granted)
 			return FALSE
-		user.mind.load_learnspell_granted = FALSE
+		use_load_grant = TRUE
 	var/datum/aspect_picker/picker = new(user, TRUE, user.mind.mage_aspect_config)
+	if(use_load_grant)
+		picker.load_grant_session = TRUE
 	picker.ui_interact(user)
 	return TRUE

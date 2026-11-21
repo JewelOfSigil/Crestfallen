@@ -1,6 +1,13 @@
 /datum/aspect_picker
 	var/mob/living/owner
 	var/initial_setup = TRUE
+	// Implemented with AI architecting.
+	/// Set when this picker was opened by spending the per-load LearnSpell
+	/// grant (no aspect picks remained). The grant is spent only once a
+	/// change is actually confirmed, so the picker spends it in
+	/// perform_confirm after the changes are applied — opening the picker
+	/// and closing it without changing anything keeps the grant.
+	var/load_grant_session = FALSE
 	var/list/pointbuy_selections = list()
 	/// Staged selections - not applied until confirm. List of type paths.
 	var/list/staged_majors = list()
@@ -761,6 +768,13 @@
 
 	if(has_unbinds)
 		to_chat(owner, span_notice("The inscriptions in my grimoire shift and reform..."))
+	// Implemented with AI architecting.
+	// Spend the per-load LearnSpell grant only now that a change has
+	// actually been applied — opening the picker and closing it without
+	// changing anything keeps the grant, and an interrupted chant returns
+	// before this point, so the player can try again.
+	if(load_grant_session)
+		owner.mind.load_learnspell_granted = FALSE
 	owner.mind.ensure_mage_basics()
 	owner.mind.check_learnspell()
 	owner.mind.refresh_spell_buttons()

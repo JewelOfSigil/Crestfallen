@@ -833,9 +833,10 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		// spent, so this is the one chance per load to change prepared
 		// spells if the spellbook is lost. The flag is set before
 		// check_learnspell, so it keeps the action instead of removing
-		// it; the action consumes the flag when it is cast. A fresh
-		// save is needed for this: old saves have no
-		// utility_learned_types to grant it from.
+		// it; the grant is spent only once a change is actually made,
+		// so the picker spends it when the change is confirmed, not
+		// when it is opened. A fresh save is needed for this: old saves
+		// have no utility_learned_types to grant it from.
 		if(length(utility_learned_types))
 			H.mind.load_learnspell_granted = TRUE
 		// Refresh the LearnSpell action from the restored config, so the
