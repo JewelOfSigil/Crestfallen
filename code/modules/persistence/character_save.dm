@@ -240,6 +240,8 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/save_ckey = H.ckey
 	if(!save_ckey && H.mind?.key)
 		save_ckey = ckey(H.mind.key)
+	if(!save_ckey && H.last_mind?.key)
+		save_ckey = ckey(H.last_mind.key)
 	if(!save_ckey)
 		save_error = "no ckey"
 		return FALSE
@@ -1163,8 +1165,12 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		// NPC humans have no ckey and no mind key, so they have no
 		// player character to save — they reset each round by design.
 		// Skip them outright instead of counting them as failures.
+		// A disconnected or ghosted player still counts: their ckey
+		// may be gone and their mind may have left the body, but the
+		// last mind keeps their key (last_mind is set at mind
+		// initialization and on body transfer), so check that too.
 		// Implemented with AI architecting.
-		if(!H.ckey && !H.mind?.key)
+		if(!H.ckey && !H.mind?.key && !H.last_mind?.key)
 			continue
 		var/datum/character_save/CS = new /datum/character_save()
 		if(CS.save_character(H))
