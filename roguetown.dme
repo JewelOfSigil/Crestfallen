@@ -2835,6 +2835,8 @@
 // Persistence (Prototype 1): character saves. Implemented with AI architecting.
 #include "code\modules\persistence\character_save.dm"
 #include "code\modules\persistence\persistence_verbs.dm"
+// Persistence (Prototype 2): world saves. Implemented with AI architecting.
+#include "code\modules\persistence\world_save.dm"
 #include "code\modules\pixel_shift\pixel_shifting.dm"
 #include "code\modules\politics\_politics.dm"
 #include "code\modules\politics\decree.dm"

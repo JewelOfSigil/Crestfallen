@@ -206,6 +206,14 @@
 	SSdbcore.SetRoundEnd()
 	SSpersistence.CollectData()
 
+	// Persistence (Prototype 2): save every character and the world
+	// before the reboot, so both survive to the next round. The save
+	// runs synchronously; joining is already closed. A failed save is
+	// logged and the reboot proceeds on the backup generation rather
+	// than aborting. Implemented with AI architecting.
+	persistence_save_all_characters()
+	persistence_save_world()
+
 	//stop collecting feedback during grifftime
 	SSblackbox.Seal()
 

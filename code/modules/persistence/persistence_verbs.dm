@@ -18,8 +18,10 @@
 // watchdog does nothing. The watchdog cannot finish a half-done save —
 // characters saved before the crash stay saved, the rest do not.
 //
-// The world-save half is implemented by Prototype 2. Until then the verb
-// reports it as not yet implemented instead of failing silently.
+// The world-save half is implemented by Prototype 2
+// (world_save.dm): persistence_save_world() saves the world, and the
+// verb reports how long it took. A FALSE return means the save
+// failed (logged), not that it is unimplemented.
 //
 // The verb reports how long the save took (characters and world separately),
 // so save times can be compared as the player count and the world grow.
@@ -73,7 +75,7 @@ GLOBAL_VAR_INIT(persistence_test_save_running, FALSE)
 
 	var/char_seconds = round(result["duration_ds"] / 10, 0.1)
 	var/world_seconds = round(world_duration_ds / 10, 0.1)
-	var/world_text = world_saved ? "saved in [world_seconds]s" : "not yet implemented (Prototype 2)"
+	var/world_text = world_saved ? "saved in [world_seconds]s" : "FAILED (see the world log)"
 	var/msg = "Test World Save complete: [result["saved"]] character(s) saved, [result["failed"]] failed in [char_seconds]s. World save: [world_text]."
 	to_chat(usr, span_notice(msg))
 	message_admins("Admin [key_name_admin(usr)] ran Test World Save: [result["saved"]] character(s) saved, [result["failed"]] failed in [char_seconds]s. World save: [world_text]. Joining was disabled during the save and has been restored.")

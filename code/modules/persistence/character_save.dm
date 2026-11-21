@@ -1168,7 +1168,4 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			log_admin("Persistence: failed to save [H.real_name] ([H.ckey]) during a manual save. Reason: [CS.save_error].")
 	return list("saved" = saved, "failed" = failed, "duration_ds" = world.realtime - start)
 
-// World-save entry point. Prototype 2 implements the world save; until then
-// this reports as not yet implemented instead of failing silently.
-/proc/persistence_save_world()
-	return FALSE
+// (World saving lives in world_save.dm — Prototype 2.)
