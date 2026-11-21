@@ -791,6 +791,15 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			I = new item_type(H.loc, entry["quantity"])
 		else
 			I = new item_type(H.loc)
+		// Coin piles: a pile subtype sets its own amount in
+		// Initialize (copper/silver/gold piles roll rand(4,19), others
+		// a fixed amount) and ignores the amount passed to new, so
+		// the saved amount is set again here, after creation, for
+		// every coin pile. Without this a restored pile comes back
+		// randomized instead of worth what was saved.
+		if(istype(I, /obj/item/roguecoin) && entry["quantity"])
+			var/obj/item/roguecoin/C = I
+			C.set_quantity(entry["quantity"])
 		// Persistence: mark a restored container so its deferred
 		// PopulateContents() stays off even if the global suppress flag
 		// clears before the spawn(0) callback runs. The coin-pouch
