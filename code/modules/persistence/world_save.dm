@@ -86,10 +86,11 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 	return null
 
 // The loaded world's name, sanitised for a folder name (lowercase
-// a-z0-9, like the character-save sanitiser). Falls back to the map
-// config name, then to "world".
+// a-z0-9, like the character-save sanitiser). Falls back to "world"
+// if the map config is not loaded yet. (The global config datum has
+// no map_name — it lives on the map config, SSmapping.config.)
 /proc/persistence_world_name()
-	var/name = SSmapping?.config?.map_name || config?.map_name || "world"
+	var/name = SSmapping?.config?.map_name || "world"
 	var/sanitized = ""
 	for(var/i in 1 to length(name))
 		var/ch = copytext(name, i, i + 1)
