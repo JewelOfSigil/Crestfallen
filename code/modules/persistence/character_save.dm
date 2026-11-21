@@ -813,7 +813,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			// save has none, or the saved cell is taken): a restored
 			// item has no grid coordinate of its own, so without this
 			// every item in a grid container renders at the first cell.
-			restore_grid_coordinate(I, parent, entry)
+			restore_grid_coordinate(H, I, parent, entry)
 		else
 			var/slot = entry["slot"]
 			if(slot == SLOT_HANDS)
@@ -853,7 +853,9 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 // here; a flip is kept by restoring the saved footprint first, so the
 // saved cell validates against the size the item had. Old saves omit
 // the grid fields, so their items simply take the first free cell.
-/datum/character_save/proc/restore_grid_coordinate(obj/item/I, atom/parent, list/entry)
+// An item that fits nowhere does not go in the container at all: it
+// drops on the floor on the character's tile.
+/datum/character_save/proc/restore_grid_coordinate(mob/living/carbon/human/H, obj/item/I, atom/parent, list/entry)
 	if(!istype(parent, /obj/item/storage))
 		return
 	var/datum/component/storage/STR = parent.GetComponent(/datum/component/storage)
@@ -872,6 +874,18 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		coordinates = first_free_grid_coordinate(STR, I)
 	if(coordinates)
 		STR.grid_add_item(I, coordinates)
+	else
+		// No cell fits: the item drops on the floor on the character's
+		// tile — the saved location, which is where the character is
+		// placed at the end of apply_to, or where the character stands
+		// if there is no saved location.
+		var/turf/T
+		if(loc_x && loc_y && loc_z)
+			T = locate(loc_x, loc_y, loc_z)
+		if(T)
+			I.forceMove(T)
+		else
+			I.forceMove(H.loc)
 
 // First free grid cell for an item, scanning the way the normal insert
 // path does (row by row from the first cell). Returns null when the
