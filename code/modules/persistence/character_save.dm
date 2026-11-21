@@ -25,7 +25,7 @@
 // (villain) roles and special roles (round-scoped), starting gear and
 // roundstart stash replenishment (the job equip step never runs on load),
 // per-item state such as durability, quality, and reagents (version 2;
-// coin amounts ARE saved, see save_item), and status effects (the whitelist below is empty in version 1
+// coin amounts and dye-station colours ARE saved, see save_item), and status effects (the whitelist below is empty in version 1
 // — every status effect checked is a short timer, or is derived from the
 // saved hunger/thirst stages, whose debuffs re-derive on life ticks).
 //
@@ -441,6 +441,20 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	if(istype(I, /obj/item/roguecoin))
 		var/obj/item/roguecoin/C = I
 		entry["quantity"] = C.quantity
+	// Dye-station colours. The primary dye lives in the atom-colour list
+	// at the FIXED priority — temporary tints (a cold debuff, a spell
+	// effect) use other priorities and are deliberately not saved — and
+	// the detail colours are plain vars on the item. Only non-null
+	// colours are recorded, so an undyed item carries no colour fields
+	// at all, and old saves simply omit them.
+	if(I.atom_colours && I.atom_colours.len >= FIXED_COLOUR_PRIORITY)
+		var/dye = I.atom_colours[FIXED_COLOUR_PRIORITY]
+		if(dye)
+			entry["dye_color"] = dye
+	if(I.detail_color)
+		entry["detail_color"] = I.detail_color
+	if(I.altdetail_color)
+		entry["altdetail_color"] = I.altdetail_color
 	var/list/kids = list()
 	for(var/obj/item/K in I.contents)
 		kids += list(save_item(H, K))
@@ -785,6 +799,25 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		var/list/kids = entry["contents"]
 		if(length(kids))
 			restore_inventory(H, kids, I)
+		// Dye-station colours, as saved: the primary dye goes back
+		// through add_atom_colour at the FIXED priority, exactly as the
+		// dye station applied it, and the detail colours are plain vars.
+		// Saves made before these fields existed omit them, and the item
+		// keeps whatever colour it was created with. The icon is rebuilt
+		// only for dyed items, after the contents are restored, so the
+		// detail overlays use the saved colours.
+		var/dyed = FALSE
+		if(entry["dye_color"])
+			I.add_atom_colour(entry["dye_color"], FIXED_COLOUR_PRIORITY)
+			dyed = TRUE
+		if(entry["detail_color"])
+			I.detail_color = entry["detail_color"]
+			dyed = TRUE
+		if(entry["altdetail_color"])
+			I.altdetail_color = entry["altdetail_color"]
+			dyed = TRUE
+		if(dyed)
+			I.update_icon()
 
 // Save every human currently in the round, as they are (including the dead,
 // mirroring the restart save). Returns list("saved" = n, "failed" = n,
