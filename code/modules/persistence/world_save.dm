@@ -16,7 +16,7 @@
 //   turfs whose type changed from the map default are written (see
 //   the baseline, below). Season-changed turfs are excluded — the
 //   season system re-applies them after the load, so they do not
-//   need to be saved. Atoms save their type, location, a small
+//   need to be saved (see persistence_is_season_change). Atoms save their type, location, a small
 //   allowlist of vars (below), and their contents, recursively.
 //   There is no blind dump of everything.
 // - Every file carries a format version (min/max, same pattern as the
@@ -147,7 +147,7 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 // Keyed by a numeric turf key (x + y*1000 + z*1000000). The diff
 // save compares each turf's current type against this baseline and
 // only writes turfs that changed. Season-changed turfs are excluded
-// separately (see persistence_season_target). Implemented with AI
+// separately (see persistence_is_season_change). Implemented with AI
 // architecting.
 GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 
@@ -170,29 +170,29 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 			GLOB.persistence_baseline_turfs[persistence_turf_key(T.x, T.y, T.z)] = T.type
 	log_world("Persistence: captured the turf baseline for [length(GLOB.persistence_baseline_turfs)] turfs.")
 
-// The seasonal target type for a baseline (map-default) turf type,
-// or null if the type is not seasonally converted. Used to exclude
-// season changes from the diff save: if a turf's current type is its
-// baseline's seasonal target, the season system will re-apply it
-// after the load, so it does not need to be saved.
+// Returns TRUE if a turf's change from its baseline (map-default)
+// type is a season change, so it does not need to be saved — the
+// season system will re-apply it after the load. The check uses the
+// current turf instance's own vars (initial() cannot read a var
+// from a typepath held in a variable), so it never touches the
+// baseline type's vars directly.
 // - Winter/summer sibling turfs (paths, grasscold, grassred,
-//   grassyel): the summer form carries winter_type, the winter form
-//   carries summer_type.
+//   grassyel): the current turf and the baseline are a winter/summer
+//   pair if either one's sibling var points at the other. The season
+//   system is the only thing that converts between a winter form and
+//   its summer form.
 // - Plain grass turfs: SSseason converts them to a single seasonal
 //   target (grass/grassyel/grassred/snow) based on the season.
-/proc/persistence_season_target(baseline_type)
-	if(!ispath(baseline_type, /turf/open/floor/rogue))
-		return null
-	var/winter = initial(baseline_type.winter_type)
-	var/summer = initial(baseline_type.summer_type)
-	if(winter || summer)
-		if(SSseason.should_show_snow_icons())
-			return winter || baseline_type
-		else
-			return summer || baseline_type
-	if(ispath(baseline_type, /turf/open/floor/rogue/grass))
-		return SSseason.get_target_turf_type()
-	return null
+/proc/persistence_is_season_change(turf/T, baseline_type)
+	if(!baseline_type || !ispath(baseline_type, /turf/open/floor/rogue))
+		return FALSE
+	if(istype(T, /turf/open/floor/rogue))
+		var/turf/open/floor/rogue/R = T
+		if(R.summer_type == baseline_type || R.winter_type == baseline_type)
+			return TRUE
+	if(ispath(baseline_type, /turf/open/floor/rogue/grass) && T.type == SSseason.get_target_turf_type())
+		return TRUE
+	return FALSE
 
 // A short checksum over the saved data, so the loader can tell
 // whether the file was written completely. It is a simple additive
@@ -264,9 +264,8 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 		// Turfs: a diff against the boot-time baseline. Each entry is
 		// a positional list (x, y, type). Only turfs whose type
 		// changed from the map default are written. A turf whose
-		// current type is its baseline's seasonal target is a
-		// season change, not a player change — the season system
-		// re-applies it after the load, so it is not written.
+		// change is a season change is not written — the season
+		// system re-applies it after the load.
 		// A turf with no baseline entry is written (fail-safe: if
 		// the baseline is missing, the turf is saved, never lost).
 		var/turf/corner_a = locate(1, 1, z)
@@ -275,7 +274,7 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 			var/baseline = GLOB.persistence_baseline_turfs[persistence_turf_key(T.x, T.y, T.z)]
 			if(baseline && T.type == baseline)
 				continue
-			if(baseline && T.type == persistence_season_target(baseline))
+			if(baseline && persistence_is_season_change(T, baseline))
 				continue
 			turf_entries += list(list(T.x, T.y, T.type))
 			coord_sum += T.x + T.y * 1000
