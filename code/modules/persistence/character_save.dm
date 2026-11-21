@@ -25,7 +25,7 @@
 // (villain) roles and special roles (round-scoped), starting gear and
 // roundstart stash replenishment (the job equip step never runs on load),
 // per-item state such as durability, quality, and reagents (version 2;
-// coin amounts and dye-station colours ARE saved, see save_item), and status effects (the whitelist below is empty in version 1
+// coin amounts, dye-station colours, and grid positions ARE saved, see save_item), and status effects (the whitelist below is empty in version 1
 // — every status effect checked is a short timer, or is derived from the
 // saved hunger/thirst stages, whose debuffs re-derive on life ticks).
 //
@@ -434,13 +434,28 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 // One item, recursively. Typepath + slot + contents, plus coin quantity
 // for coin piles (a pile's amount is money, and money must survive the
 // load). Other per-item state (durability, quality, reagents) is version 2.
-/datum/character_save/proc/save_item(mob/living/carbon/human/H, obj/item/I)
+/datum/character_save/proc/save_item(mob/living/carbon/human/H, obj/item/I, atom/parent_storage = null)
 	var/list/entry = list()
 	entry["type"] = I.type
 	entry["slot"] = get_item_slot(H, I)
 	if(istype(I, /obj/item/roguecoin))
 		var/obj/item/roguecoin/C = I
 		entry["quantity"] = C.quantity
+	// Grid position. A grid container records each item's origin cell
+	// (and its footprint, which a flip can swap) in its storage
+	// component; without it every restored item renders at the first
+	// cell (0,0). Only recorded when the parent is a grid container
+	// and the item has a recorded cell, so items on the mob or in a
+	// plain container carry no grid fields at all.
+	if(istype(parent_storage, /obj/item/storage))
+		var/datum/component/storage/STR = parent_storage.GetComponent(/datum/component/storage)
+		if(STR && STR.grid)
+			var/list/coords = STR.first_coordinates_item[I]
+			if(coords && coords.len >= 2)
+				entry["grid_x"] = coords[1]
+				entry["grid_y"] = coords[2]
+				entry["grid_width"] = I.grid_width
+				entry["grid_height"] = I.grid_height
 	// Dye-station colours. The primary dye lives in the atom-colour list
 	// at the FIXED priority — temporary tints (a cold debuff, a spell
 	// effect) use other priorities and are deliberately not saved — and
@@ -457,7 +472,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		entry["altdetail_color"] = I.altdetail_color
 	var/list/kids = list()
 	for(var/obj/item/K in I.contents)
-		kids += list(save_item(H, K))
+		kids += list(save_item(H, K, I))
 	entry["contents"] = kids
 	return entry
 
@@ -794,6 +809,11 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			qdel(C)
 		if(parent)
 			I.forceMove(parent)
+			// Grid position, as saved (or the first free cell when the
+			// save has none, or the saved cell is taken): a restored
+			// item has no grid coordinate of its own, so without this
+			// every item in a grid container renders at the first cell.
+			restore_grid_coordinate(I, parent, entry)
 		else
 			var/slot = entry["slot"]
 			if(slot == SLOT_HANDS)
@@ -826,6 +846,45 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			dyed = TRUE
 		if(dyed)
 			I.update_icon()
+
+// Put a restored item on its saved grid cell, or the first free cell.
+// The coordinate lives in the container's storage component, not on
+// the item, so it is recorded per item at save time and re-applied
+// here; a flip is kept by restoring the saved footprint first, so the
+// saved cell validates against the size the item had. Old saves omit
+// the grid fields, so their items simply take the first free cell.
+/datum/character_save/proc/restore_grid_coordinate(obj/item/I, atom/parent, list/entry)
+	if(!istype(parent, /obj/item/storage))
+		return
+	var/datum/component/storage/STR = parent.GetComponent(/datum/component/storage)
+	if(!STR || !STR.grid)
+		return
+	if(entry["grid_width"])
+		I.grid_width = entry["grid_width"]
+	if(entry["grid_height"])
+		I.grid_height = entry["grid_height"]
+	var/grid_x = entry["grid_x"]
+	var/grid_y = entry["grid_y"]
+	var/coordinates
+	if(!isnull(grid_x) && !isnull(grid_y) && STR.validate_grid_coordinates("[grid_x],[grid_y]", I.grid_width, I.grid_height, I))
+		coordinates = "[grid_x],[grid_y]"
+	else
+		coordinates = first_free_grid_coordinate(STR, I)
+	if(coordinates)
+		STR.grid_add_item(I, coordinates)
+
+// First free grid cell for an item, scanning the way the normal insert
+// path does (row by row from the first cell). Returns null when the
+// grid is genuinely full.
+/datum/character_save/proc/first_free_grid_coordinate(datum/component/storage/STR, obj/item/I)
+	var/grid_box_ratio = (world.icon_size / STR.grid_box_size)
+	var/x_value = ((STR.screen_max_columns * grid_box_ratio) - 1)
+	for(var/current_y in 0 to ((STR.screen_max_rows * grid_box_ratio) - 1))
+		for(var/current_x in 0 to x_value)
+			var/final_coordinates = "[current_x],[current_y]"
+			if(STR.validate_grid_coordinates(final_coordinates, I.grid_width, I.grid_height, I))
+				return final_coordinates
+	return null
 
 // Save every human currently in the round, as they are (including the dead,
 // mirroring the restart save). Returns list("saved" = n, "failed" = n,
