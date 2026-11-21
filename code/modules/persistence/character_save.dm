@@ -149,6 +149,18 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/list/spell_types = list()
 	var/list/major_aspect_types = list()
 	var/list/minor_aspect_types = list()
+	// Spellpoint choices: the mage aspect config (mastery, major, minor,
+	// utilities, ward) that sets how many spellpoint choices the
+	// character has. An assoc list, string keys to numbers/bools.
+	var/list/mage_aspect_config = list()
+	// Stash: items not yet withdrawn from the mind's stash, name-keyed
+	// to their item typepath, with their metadata (colours, custom name).
+	var/list/special_items = list()
+	var/list/special_items_metadata = list()
+	// Set when the savefile actually holds a stash (new saves always
+	// write it, even empty); old saves omit it, and then the restore
+	// leaves the stash alone instead of wiping it.
+	var/special_items_present = FALSE
 	var/patron_type
 	var/devotion_type // Saved for later; restore is deferred (see apply_to).
 	// Relationships, name-keyed so they stand alone.
@@ -335,15 +347,44 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	spell_types = list()
 	major_aspect_types = list()
 	minor_aspect_types = list()
+	mage_aspect_config = list()
+	special_items = list()
+	special_items_metadata = list()
+	special_items_present = FALSE
 	if(H.mind)
-		// Spells are /obj/effect/proc_holder/spell objects, not /datum/spell,
-		// so the loop var is typed to the real type.
-		for(var/obj/effect/proc_holder/spell/S in H.mind.spell_list)
+		// Spells are stored as references in the mind's spell_list, and
+		// a save cannot keep a reference — so the spell TYPES are
+		// recorded and the spells are granted again on load. That covers
+		// both the old proc_holder spells and the action-based spells:
+		// the Arcyne Potential virtue's Prestidigitation and the minor
+		// utility spells it lets the character learn are action-based,
+		// and the old loop only saw proc_holder spells, so they were
+		// lost. LearnSpell is left out: it is the action for spending
+		// spellpoint choices, and check_learnspell() grants or removes
+		// it from the restored config on load.
+		for(var/datum/S in H.mind.spell_list)
+			if(!istype(S, /datum/action/cooldown/spell) && !istype(S, /obj/effect/proc_holder/spell))
+				continue
+			if(istype(S, /datum/action/cooldown/spell/learnspell))
+				continue
 			spell_types += S.type
 		for(var/datum/magic_aspect/A in H.mind.major_aspects)
 			major_aspect_types += A.type
 		for(var/datum/magic_aspect/A in H.mind.minor_aspects)
 			minor_aspect_types += A.type
+		// Spellpoint choices: the mage aspect config that sets how many
+		// major, minor, and utility points the character has. Classes
+		// with larger amounts (and the virtue's extra utilities) lose
+		// them on load if this is not saved.
+		if(LAZYLEN(H.mind.mage_aspect_config))
+			mage_aspect_config = H.mind.mage_aspect_config.Copy()
+		// Stash: items not yet withdrawn. The stash is the mind's
+		// special_items list (name to item typepath) plus its metadata
+		// (colours, custom name); without it, anything still in the
+		// stash at save time is gone on return.
+		special_items = H.mind.special_items.Copy()
+		special_items_metadata = H.mind.special_items_metadata.Copy()
+		special_items_present = TRUE
 	if(ispath(H.patron))
 		patron_type = H.patron
 	else if(H.patron)
@@ -416,6 +457,9 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["spell_types"], spell_types)
 	WRITE_FILE(S["major_aspect_types"], major_aspect_types)
 	WRITE_FILE(S["minor_aspect_types"], minor_aspect_types)
+	WRITE_FILE(S["mage_aspect_config"], mage_aspect_config)
+	WRITE_FILE(S["special_items"], special_items)
+	WRITE_FILE(S["special_items_metadata"], special_items_metadata)
 	WRITE_FILE(S["patron_type"], patron_type)
 	WRITE_FILE(S["devotion_type"], devotion_type)
 	WRITE_FILE(S["known_people"], known_people)
@@ -542,6 +586,14 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	S["spell_types"] >> spell_types
 	S["major_aspect_types"] >> major_aspect_types
 	S["minor_aspect_types"] >> minor_aspect_types
+	S["mage_aspect_config"] >> mage_aspect_config
+	// The stash is only in new saves; old saves omit it, and then the
+	// restore leaves the stash alone instead of wiping it.
+	if("special_items" in S)
+		S["special_items"] >> special_items
+		special_items_present = TRUE
+	if("special_items_metadata" in S)
+		S["special_items_metadata"] >> special_items_metadata
 	S["patron_type"] >> patron_type
 	S["devotion_type"] >> devotion_type
 	S["known_people"] >> known_people
@@ -724,9 +776,18 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	spawn(1)
 		GLOB.persistence_suppress_populate = FALSE
 
-	// Magic and religion. Spells first: aspect attunement auto-resolves
-	// its choice spell from the spells the character already has.
+	// Magic and religion. The spellpoint config first: aspect
+	// attunement reads its major/minor/mastery limits, and
+	// check_learnspell reads its remaining picks, so the character
+	// keeps the larger spellpoint choices their class grants.
 	if(H.mind)
+		if(LAZYLEN(mage_aspect_config))
+			H.mind.mage_aspect_config = mage_aspect_config.Copy()
+		// Spells: aspect attunement auto-resolves its choice spell from
+		// the spells the character already has, so spells come before
+		// aspects. AddSpell drops a duplicate (same name and type), so
+		// a spell a virtue or the class re-granted on the fresh human
+		// is not granted twice.
 		for(var/spell_type in spell_types)
 			if(!ispath(spell_type))
 				continue
@@ -742,6 +803,23 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 				continue
 			var/datum/magic_aspect/A = new aspect_type
 			H.mind.attune_aspect(A)
+		// Refresh the LearnSpell action from the restored config, so the
+		// character can still spend any spellpoint choices they have
+		// left.
+		H.mind.check_learnspell()
+		// Stash: items not yet withdrawn, as saved. The saved list
+		// replaces whatever copy_to put there, so an item already
+		// withdrawn before the save does not come back. Only entries
+		// whose value is a real item typepath are kept.
+		if(special_items_present)
+			var/list/restored_stash = list()
+			for(var/stash_name in special_items)
+				var/stash_type = special_items[stash_name]
+				if(ispath(stash_type, /obj/item))
+					restored_stash[stash_name] = stash_type
+			H.mind.special_items = restored_stash
+			if(islist(special_items_metadata))
+				H.mind.special_items_metadata = special_items_metadata.Copy()
 		if(length(known_people))
 			H.mind.known_people = known_people.Copy()
 	if(patron_type)
