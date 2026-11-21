@@ -19,8 +19,15 @@
 	var/mob/living/user = owner
 	if(!istype(user) || !user.mind)
 		return FALSE
+	// Implemented with AI architecting.
+	// A character who has learned spells by spending points gets one use
+	// of this action per character load, so they can change their prepared
+	// spells even after their picks are spent and without the spellbook.
+	// The grant is consumed when the picker is opened.
 	if(!user.mind.has_remaining_aspect_picks())
-		return FALSE
+		if(!user.mind.load_learnspell_granted)
+			return FALSE
+		user.mind.load_learnspell_granted = FALSE
 	var/datum/aspect_picker/picker = new(user, TRUE, user.mind.mage_aspect_config)
 	picker.ui_interact(user)
 	return TRUE

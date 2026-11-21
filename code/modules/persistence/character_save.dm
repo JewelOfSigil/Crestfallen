@@ -827,6 +827,17 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 				continue
 			var/datum/magic_aspect/A = new aspect_type
 			H.mind.attune_aspect(A)
+		// One usage of the LearnSpell action per character load, for a
+		// character who has learned spells by spending points: classes
+		// without the spellbook lose the action once their picks are
+		// spent, so this is the one chance per load to change prepared
+		// spells if the spellbook is lost. The flag is set before
+		// check_learnspell, so it keeps the action instead of removing
+		// it; the action consumes the flag when it is cast. A fresh
+		// save is needed for this: old saves have no
+		// utility_learned_types to grant it from.
+		if(length(utility_learned_types))
+			H.mind.load_learnspell_granted = TRUE
 		// Refresh the LearnSpell action from the restored config, so the
 		// character can still spend any spellpoint choices they have
 		// left.

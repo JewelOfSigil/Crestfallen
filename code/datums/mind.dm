@@ -60,6 +60,13 @@ GLOBAL_LIST_EMPTY(personal_objective_minds)
 	var/list/minor_aspects
 	/// Mage aspect system config from subclass. Keys: "mastery", "major", "minor", "utilities". Optional: "locked_aspects" (list of type paths).
 	var/list/mage_aspect_config
+	// Implemented with AI architecting.
+	/// One usage of the LearnSpell action, granted per character load to a
+	/// character who has learned spells by spending points, so they can
+	/// change their prepared spells once per load even after their picks
+	/// are spent and without the spellbook. Consumed when the action is
+	/// cast. Not saved; set fresh on each load.
+	var/load_learnspell_granted = FALSE
 	/// Aspect reset budget used. Major costs 2, Minor/Utility costs 1. Max 2. Resets on sleep.
 	var/aspect_resets_used = 0
 
@@ -1053,7 +1060,12 @@ GLOBAL_LIST_EMPTY(personal_objective_minds)
 	// Aspect config system — LearnSpell only appears until the first binding.
 	// After that, the spellbook handles edit mode.
 	if(LAZYLEN(mage_aspect_config))
-		if(!has_remaining_aspect_picks())
+		// Implemented with AI architecting.
+		// A character who has learned spells by spending points gets one
+		// use of LearnSpell per character load, so they can change their
+		// prepared spells even after their picks are spent and without
+		// the spellbook. The grant keeps the action until it is used.
+		if(!has_remaining_aspect_picks() && !load_learnspell_granted)
 			RemoveSpell(/datum/action/cooldown/spell/learnspell)
 			rebuild_action_order()
 			return
