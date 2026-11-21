@@ -1160,6 +1160,12 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/saved = 0
 	var/failed = 0
 	for(var/mob/living/carbon/human/H in GLOB.human_list)
+		// NPC humans have no ckey and no mind key, so they have no
+		// player character to save — they reset each round by design.
+		// Skip them outright instead of counting them as failures.
+		// Implemented with AI architecting.
+		if(!H.ckey && !H.mind?.key)
+			continue
 		var/datum/character_save/CS = new /datum/character_save()
 		if(CS.save_character(H))
 			saved++

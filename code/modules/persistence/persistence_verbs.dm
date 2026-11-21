@@ -10,11 +10,14 @@
 //
 // DM has no try/catch, so a crash mid-save would skip the line that
 // re-enables joining. The watchdog below covers that: the verb schedules
-// it before the save starts, and it runs one tick later on its own thread
-// (a crash in the verb's thread does not kill it). If the save is still
-// marked running when the watchdog wakes, the save crashed, and the
-// watchdog re-enables joining itself and logs it. On the normal path the
-// save finishes in the same tick, the mark is already cleared, and the
+// it before the save starts, and it runs on its own thread (a crash in
+// the verb's thread does not kill it). If the save is still marked
+// running when the watchdog wakes, the save crashed, and the watchdog
+// re-enables joining itself and logs it. The watchdog waits a generous
+// 60 seconds: the save is synchronous and takes many ticks (a full
+// world sweep plus every character), so a short delay would fire while
+// a healthy save is still running. On the normal path the save finishes
+// well inside that window, the mark is already cleared, and the
 // watchdog does nothing. The watchdog cannot finish a half-done save —
 // characters saved before the crash stay saved, the rest do not.
 //
@@ -30,9 +33,10 @@
 GLOBAL_VAR_INIT(persistence_test_save_running, FALSE)
 
 // Watchdog for the Test World Save verb: if the save crashed mid-run,
-// re-enable joining. Runs one tick after the save starts; the save is
-// synchronous and finishes in the same tick, so the mark is only still
-// set if the save never returned.
+// re-enable joining. Runs 60 seconds after the save starts; the save
+// is synchronous and takes many ticks (a full world sweep plus every
+// character), so the mark is only still set after that long if the save
+// never returned.
 /proc/persistence_test_save_watchdog(was_disabled)
 	if(!GLOB.persistence_test_save_running)
 		return
@@ -62,9 +66,9 @@ GLOBAL_VAR_INIT(persistence_test_save_running, FALSE)
 	SSticker.late_join_disabled = TRUE
 	GLOB.persistence_test_save_running = TRUE
 	// Schedule the watchdog BEFORE the save starts, so it exists even if
-	// the save crashes. It wakes one tick later and does nothing if the
-	// save already finished.
-	spawn(1)
+	// the save crashes. It wakes 60 seconds later and does nothing if
+	// the save already finished.
+	spawn(600)
 		persistence_test_save_watchdog(was_disabled)
 	var/list/result = persistence_save_all_characters()
 	var/world_start = world.realtime
