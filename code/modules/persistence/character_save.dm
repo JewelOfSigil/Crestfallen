@@ -721,13 +721,8 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	if(statpack_type && ispath(statpack_type, /datum/statpack))
 		H.statpack = new statpack_type
 
-	// Skills.
-	var/datum/skill_holder/SH = H.ensure_skills()
-	if(SH)
-		if(length(skill_levels))
-			SH.known_skills = skill_levels.Copy()
-		if(length(skill_xp))
-			SH.skill_experience = skill_xp.Copy()
+	// Skills, through the holder's own setters (restore_skills).
+	restore_skills(H)
 
 	// Job. The job datum is re-resolved by title; equip is never run.
 	if(job_title)
@@ -1008,6 +1003,71 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		// are restored, so the detail overlays use the saved colours.
 		if(dyed)
 			I.update_icon()
+
+// Skills, as saved. The saved lists are keyed by the skill datums as
+// they were when saved, but a savefile deserialises a datum as a new
+// instance, so those keys are copies of the skill singletons, not the
+// singletons themselves. Copying the lists across directly leaves the
+// holder keyed by the copies: the skills button, which iterates the
+// holder's own keys, shows the right levels, but get_skill_level —
+// which looks the skill up by its singleton — finds nothing, so the
+// player panel and every skill check read None. The levels are
+// therefore set through the holder's own procs, which resolve each
+// skill to its singleton, and the experience is written back under
+// the singleton key too. Old saves carry the same lists, so they
+// restore the same way; a fresh save is not needed.
+/datum/character_save/proc/restore_skills(mob/living/carbon/human/H)
+	var/datum/skill_holder/SH = H.ensure_skills()
+	if(!SH)
+		return
+	// Levels first, through the holder's setters, so the holder is
+	// keyed by the skill singletons. Each saved key is resolved by its
+	// typepath (a saved key may already be a typepath); the setters
+	// are silent, so the load does not announce level changes or
+	// record round statistics for them.
+	if(length(skill_levels))
+		for(var/saved_key in skill_levels)
+			var/skill_type
+			if(ispath(saved_key))
+				skill_type = saved_key
+			else if(istype(saved_key, /datum/skill))
+				var/datum/skill/saved_skill = saved_key
+				skill_type = saved_skill.type
+			else
+				continue
+			if(!ispath(skill_type, /datum/skill))
+				continue
+			var/saved_level = skill_levels[saved_key]
+			if(!isnum(saved_level))
+				continue
+			var/current_level = SH.get_skill_level(skill_type)
+			if(saved_level > current_level)
+				SH.adjust_skillrank_up_to(skill_type, saved_level, TRUE)
+			else if(saved_level < current_level)
+				SH.adjust_skillrank_down_to(skill_type, saved_level, TRUE)
+	// Experience after the levels, under the singleton key, so the
+	// progress within the level is kept. The setters leave the
+	// experience at the level's lower bound, so this has to run after
+	// them, not before.
+	if(length(skill_xp))
+		for(var/saved_key in skill_xp)
+			var/skill_type
+			if(ispath(saved_key))
+				skill_type = saved_key
+			else if(istype(saved_key, /datum/skill))
+				var/datum/skill/saved_skill = saved_key
+				skill_type = saved_skill.type
+			else
+				continue
+			if(!ispath(skill_type, /datum/skill))
+				continue
+			var/saved_xp = skill_xp[saved_key]
+			if(!isnum(saved_xp))
+				continue
+			var/datum/skill/skill_ref = GetSkillRef(skill_type)
+			if(!skill_ref)
+				continue
+			SH.skill_experience[skill_ref] = max(0, saved_xp)
 
 // Enchantments and blessings, as saved. Enchantments are re-granted by
 // adding the magic_item component with each saved effect (the component
