@@ -530,6 +530,33 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		entry["detail_color"] = I.detail_color
 	if(I.altdetail_color)
 		entry["altdetail_color"] = I.altdetail_color
+	// Enchantments and blessings. Enchantments live in a magic_item
+	// component (its magical_effects list); the effect datums carry no
+	// instance state beyond their type, so their typepaths are recorded
+	// and the effects are granted again on load. A blessing lives in a
+	// silverbless component on the weapon; only its type is recorded,
+	// because the silver type and the stat bonuses come from the weapon
+	// type itself and are already on a freshly created weapon. Malum's
+	// blessing is a plain var on the weapon. The name is recorded when
+	// it differs from the type default, because a blessing prefixes it
+	// ("blessed ...") and an enchantment suffixes it ("... of
+	// woodcutting"), and the component does not re-apply the
+	// enchantment's suffix.
+	var/datum/component/magic_item/MI = I.GetComponent(/datum/component/magic_item)
+	if(MI && length(MI.magical_effects))
+		var/list/effect_types = list()
+		for(var/datum/magic_item/E in MI.magical_effects)
+			effect_types += E.type
+		entry["enchant_effect_types"] = effect_types
+	var/datum/component/silverbless/SB = I.GetComponent(/datum/component/silverbless)
+	if(SB && SB.is_blessed)
+		entry["blessing_type"] = SB.is_blessed
+	if(istype(I, /obj/item/rogueweapon))
+		var/obj/item/rogueweapon/W = I
+		if(W.malumblessed_w)
+			entry["malumblessed"] = TRUE
+	if(I.name != initial(I.name))
+		entry["name"] = I.name
 	var/list/kids = list()
 	for(var/obj/item/K in I.contents)
 		kids += list(save_item(H, K, I))
@@ -952,6 +979,11 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		if(entry["altdetail_color"])
 			I.altdetail_color = entry["altdetail_color"]
 			dyed = TRUE
+		// Enchantments and blessings, as saved, before the item is
+		// placed or equipped: the blessing's on_equipped adds the
+		// blessed-weapon stress when it is held, so it has to be
+		// applied first.
+		restore_item_enchantments(I, entry)
 		if(parent)
 			I.forceMove(parent)
 			// Grid position, as saved (or the first free cell when the
@@ -976,6 +1008,34 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		// are restored, so the detail overlays use the saved colours.
 		if(dyed)
 			I.update_icon()
+
+// Enchantments and blessings, as saved. Enchantments are re-granted by
+// adding the magic_item component with each saved effect (the component
+// is unique per item, so further effects join the same component); a
+// blessing is re-applied through the silverbless component already on
+// a freshly created weapon (its silver type and bonuses come from the
+// weapon type), and Malum's blessing is a plain var. The blessing is
+// applied directly rather than through try_bless, so the load does not
+// play the blessing sound and message. The name is restored after
+// them, so the saved name — which may carry the blessing's prefix or
+// an enchantment's suffix — is final. Old saves omit all of these
+// fields, and their items simply come back plain.
+/datum/character_save/proc/restore_item_enchantments(obj/item/I, list/entry)
+	var/list/effect_types = entry["enchant_effect_types"]
+	if(length(effect_types))
+		for(var/effect_type in effect_types)
+			if(!ispath(effect_type, /datum/magic_item))
+				continue
+			var/datum/magic_item/effect = new effect_type
+			I.AddComponent(/datum/component/magic_item, effect)
+	var/datum/component/silverbless/SB = I.GetComponent(/datum/component/silverbless)
+	if(SB && entry["blessing_type"] && !SB.is_blessed)
+		SB.apply_bless(entry["blessing_type"])
+	if(istype(I, /obj/item/rogueweapon) && entry["malumblessed"])
+		var/obj/item/rogueweapon/W = I
+		W.malumblessed_w = TRUE
+	if(entry["name"])
+		I.name = entry["name"]
 
 // Put a restored item on its saved grid cell, or the first free cell.
 // The coordinate lives in the container's storage component, not on
