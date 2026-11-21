@@ -17,6 +17,14 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 	var/use_saved_state = FALSE
 	var/saved_state_character = ""
 	// Implemented with AI architecting.
+	// Persistence: whether the roundstart load actually succeeded for
+	// this character. transfer_characters reads it to decide whether
+	// the class menu and post-equipment step should run — they are part
+	// of the fresh-join equip stage the save replaces. FALSE unless a
+	// load succeeded (a yes answer whose load failed still counts as
+	// a fresh join, so the class menu must still open).
+	var/saved_state_loaded = FALSE
+	// Implemented with AI architecting.
 	// Persistence: the latejoin entry prompt's answer. The entry prompt
 	// (before the role list) records its answer here so AttemptLateSpawn
 	// does not ask a second time; AttemptLateSpawn consumes (clears) it.
@@ -483,7 +491,13 @@ GLOBAL_LIST_INIT(roleplay_readme, world.file2list("strings/rt/rp_prompt.txt"))
 	else
 		GLOB.respawncounts[character.ckey] = 1
 //	add_roundplayed(character.ckey)
-	if(humanc)
+	if(humanc && !loaded)
+		// Implemented with AI architecting.
+		// Persistence: a character loaded from a save already has their
+		// class (apply_to restores mind.picked_advclass) and their gear,
+		// so the class menu and the post-equipment step — both part of
+		// the fresh-join equip stage the save replaces — must not run
+		// on top of them. A fresh join still gets both.
 		SSrole_class_handler.setup_class_handler(humanc)
 		try_apply_character_post_equipment(humanc)
 	log_manifest(character.mind.key,character.mind,character,latejoin = TRUE)

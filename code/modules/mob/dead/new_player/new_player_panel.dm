@@ -139,5 +139,17 @@
 						to_chat(src, span_notice("Thou have been added to the queue to join the game. Your position in queue is [SSticker.queued_players.len]."))
 					return TRUE
 
+			// Implemented with AI architecting.
+			// Persistence: if this character has a saved state, ask
+			// whether to use it BEFORE the role list is shown. A yes
+			// joins straight into the saved character (no role list,
+			// no class menu); a no, no save, or a saved job that is no
+			// longer available falls through to the role list as normal.
+			// This is the latejoin button the lobby actually shows, so
+			// the question has to live here as well as in the Topic
+			// late_join branch.
+			if(try_latejoin_saved())
+				return TRUE
+
 			LateChoices()
 			return TRUE

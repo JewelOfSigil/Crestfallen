@@ -498,6 +498,13 @@ SUBSYSTEM_DEF(ticker)
 			if(!loaded)
 				log_admin("Persistence: failed to load the saved state for [character.real_name] ([lobby_player.ckey]) at roundstart; joining with fresh starting gear instead.")
 				to_chat(lobby_player, span_warning("Your saved state could not be loaded, so you are joining with fresh starting gear instead."))
+		// Implemented with AI architecting.
+		// Persistence: remember whether this character loaded, so
+		// transfer_characters can skip the class menu and the
+		// post-equipment step for them (both belong to the fresh-join
+		// equip stage the save replaces).
+		if(lobby_player)
+			lobby_player.saved_state_loaded = loaded
 		if(!loaded)
 			SSjob.EquipRank(new_player, character.mind.assigned_role, joined_late = FALSE)
 		CHECK_TICK
@@ -506,6 +513,13 @@ SUBSYSTEM_DEF(ticker)
 	var/list/livings = list()
 	for(var/i in GLOB.new_player_list)
 		var/mob/dead/new_player/player = i
+		// Implemented with AI architecting.
+		// Persistence: read whether this character loaded from a save
+		// BEFORE transfer_character() — it qdels the lobby player. A
+		// loaded character already has their class and gear, so the
+		// class menu and post-equipment step (fresh-join equip stage)
+		// must not run on top of them.
+		var/was_loaded = player?.saved_state_loaded
 		var/mob/living = player?.transfer_character()
 		if(living)
 			qdel(player)
@@ -514,7 +528,7 @@ SUBSYSTEM_DEF(ticker)
 				var/atom/movable/screen/splash/S = new(living.client, TRUE)
 				S.Fade(TRUE)
 			livings += living
-			if(ishuman(living))
+			if(ishuman(living) && !was_loaded)
 				SSrole_class_handler.setup_class_handler(living)
 				try_apply_character_post_equipment(living)
 		else
