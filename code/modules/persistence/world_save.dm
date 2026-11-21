@@ -12,12 +12,13 @@
 // removed after a successful save.
 //
 // Format rules (design section 4):
-// - One savefile per z-level. A full sweep for now (every turf on the
-//   map's z-levels); a sparse / difference-based save is a later
-//   optimisation.
-// - Per-type saved-variable lists. Turfs save their type. Atoms save
-//   their type, location, a small allowlist of vars (below), and their
-//   contents, recursively. There is no blind dump of everything.
+// - One savefile per z-level. Turfs are saved as a diff: only
+//   turfs whose type changed from the map default are written (see
+//   the baseline, below). Season-changed turfs are excluded — the
+//   season system re-applies them after the load, so they do not
+//   need to be saved. Atoms save their type, location, a small
+//   allowlist of vars (below), and their contents, recursively.
+//   There is no blind dump of everything.
 // - Every file carries a format version (min/max, same pattern as the
 //   preferences savefile) and a checksum, computed from the saved
 //   data, so the loader can tell whether the file was written
@@ -141,6 +142,58 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 		zs += z
 	return zs
 
+// The map-default turf types, captured at boot right after the map
+// loads and before the world save is overlaid (see SSmapping).
+// Keyed by a numeric turf key (x + y*1000 + z*1000000). The diff
+// save compares each turf's current type against this baseline and
+// only writes turfs that changed. Season-changed turfs are excluded
+// separately (see persistence_season_target). Implemented with AI
+// architecting.
+GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
+
+// A numeric key for a turf position. Unique while x and y stay under
+// 1000 and z under 1000, which holds for Dun World (450 x 255).
+/proc/persistence_turf_key(x, y, z)
+	return x + y * 1000 + z * 1000000
+
+// Capture the map-default turf types into the baseline. Runs once at
+// boot, after loadWorld() and before the world save is overlaid, so
+// the baseline is the fresh map — never the restored world. A turf
+// that was changed in an earlier round and restored by the load
+// still differs from this baseline, so it is saved again.
+/proc/persistence_capture_baseline()
+	var/list/zs = persistence_world_map_zs()
+	for(var/z in zs)
+		var/turf/corner_a = locate(1, 1, z)
+		var/turf/corner_b = locate(world.maxx, world.maxy, z)
+		for(var/turf/T in block(corner_a, corner_b))
+			GLOB.persistence_baseline_turfs[persistence_turf_key(T.x, T.y, T.z)] = T.type
+	log_world("Persistence: captured the turf baseline for [length(GLOB.persistence_baseline_turfs)] turfs.")
+
+// The seasonal target type for a baseline (map-default) turf type,
+// or null if the type is not seasonally converted. Used to exclude
+// season changes from the diff save: if a turf's current type is its
+// baseline's seasonal target, the season system will re-apply it
+// after the load, so it does not need to be saved.
+// - Winter/summer sibling turfs (paths, grasscold, grassred,
+//   grassyel): the summer form carries winter_type, the winter form
+//   carries summer_type.
+// - Plain grass turfs: SSseason converts them to a single seasonal
+//   target (grass/grassyel/grassred/snow) based on the season.
+/proc/persistence_season_target(baseline_type)
+	if(!ispath(baseline_type, /turf/open/floor/rogue))
+		return null
+	var/winter = initial(baseline_type.winter_type)
+	var/summer = initial(baseline_type.summer_type)
+	if(winter || summer)
+		if(SSseason.should_show_snow_icons())
+			return winter || baseline_type
+		else
+			return summer || baseline_type
+	if(ispath(baseline_type, /turf/open/floor/rogue/grass))
+		return SSseason.get_target_turf_type()
+	return null
+
 // A short checksum over the saved data, so the loader can tell
 // whether the file was written completely. It is a simple additive
 // check over coordinates and counts, not a cryptographic hash —
@@ -208,11 +261,22 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 		var/list/turf_entries = list()
 		var/list/atom_entries = list()
 		var/coord_sum = 0
-		// Turfs: a full sweep of the z-level. Each entry is a
-		// positional list (x, y, type).
+		// Turfs: a diff against the boot-time baseline. Each entry is
+		// a positional list (x, y, type). Only turfs whose type
+		// changed from the map default are written. A turf whose
+		// current type is its baseline's seasonal target is a
+		// season change, not a player change — the season system
+		// re-applies it after the load, so it is not written.
+		// A turf with no baseline entry is written (fail-safe: if
+		// the baseline is missing, the turf is saved, never lost).
 		var/turf/corner_a = locate(1, 1, z)
 		var/turf/corner_b = locate(world.maxx, world.maxy, z)
 		for(var/turf/T in block(corner_a, corner_b))
+			var/baseline = GLOB.persistence_baseline_turfs[persistence_turf_key(T.x, T.y, T.z)]
+			if(baseline && T.type == baseline)
+				continue
+			if(baseline && T.type == persistence_season_target(baseline))
+				continue
 			turf_entries += list(list(T.x, T.y, T.type))
 			coord_sum += T.x + T.y * 1000
 		// Atoms: top-level /obj atoms on the turf (contents ride

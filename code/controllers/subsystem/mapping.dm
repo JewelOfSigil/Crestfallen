@@ -81,9 +81,13 @@ SUBSYSTEM_DEF(mapping)
 		map_adjustment.on_mapping_init()
 		log_world("Applied '[map_adjustment.map_file_name]' map adjustment: on_mapping_init()")
 	loadWorld()
-	// Persistence (Prototype 2): overlay the world save on the fresh
-	// map, before SSatoms initialises the map-loaded atoms. Implemented
-	// with AI architecting.
+	// Persistence (Prototype 2): capture the map-default turf types
+	// into the baseline, before the world save is overlaid — the
+	// baseline is the fresh map, never the restored world. Then
+	// overlay the world save on the fresh map, before SSatoms
+	// initialises the map-loaded atoms. Implemented with AI
+	// architecting.
+	persistence_capture_baseline()
 	persistence_load_world()
 	repopulate_sorted_areas()
 	process_teleport_locs()			//Sets up the wizard teleport locations
