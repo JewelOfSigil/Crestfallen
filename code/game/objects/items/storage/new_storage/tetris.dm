@@ -625,13 +625,23 @@
 
 /datum/component/storage/proc/grid_remove_item(obj/item/removed)
 	first_coordinates_item -= removed
+	var/had_cell = FALSE
 	if(grid && LAZYACCESS(item_to_grid_coordinates, removed))
 		for(var/location in LAZYACCESS(item_to_grid_coordinates, removed))
 			LAZYREMOVE(grid_coordinates_to_item, location)
 		LAZYREMOVE(item_to_grid_coordinates, removed)
-		removed.underlays = null
-		return TRUE
-	return FALSE
+		had_cell = TRUE
+	// The cell background is added by the grid display whenever the
+	// container is opened, whether or not this item has a recorded
+	// cell — a restored item has none — so it is cleared on every
+	// removal, not only when a cell was recorded. Only the grid cell
+	// background is removed: an item can carry its own underlays (a
+	// perfume's liquid, a flask's filling), and those stay. Both
+	// footprints are tried, in case the item was flipped after the
+	// background was added. Implemented with AI architecting.
+	removed.underlays -= get_bound_underlay(removed.grid_width, removed.grid_height)
+	removed.underlays -= get_bound_underlay(removed.grid_height, removed.grid_width)
+	return had_cell
 
 /datum/component/storage/proc/update_item(obj/item/item)
 	var/list/coords = first_coordinates_item[item]
