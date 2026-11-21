@@ -127,8 +127,11 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 // compiled in) is below station_start and is not a map z-level.
 // Runtime turf-reservation levels are also excluded: they are marked
 // with the ZTRAIT_RESERVED trait and are runtime scratch space, not
-// persistent world state, so they are never saved. Implemented with
-// AI architecting.
+// persistent world state, so they are never saved. Away-mission levels
+// are excluded the same way: zones loaded as new z-levels (for example
+// through /datum/map_template/load_new_z()) are marked with the
+// ZTRAIT_AWAY trait, and they are transient exploration or mining
+// zones, not persistent world state. Implemented with AI architecting.
 /proc/persistence_world_map_zs()
 	var/start = SSmapping?.station_start || 1
 	var/end = world.maxz
@@ -138,6 +141,8 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 	var/list/zs = list()
 	for(var/z in start to end)
 		if(SSmapping?.level_trait(z, ZTRAIT_RESERVED))
+			continue
+		if(SSmapping?.level_trait(z, ZTRAIT_AWAY))
 			continue
 		zs += z
 	return zs
