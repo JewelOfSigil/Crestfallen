@@ -124,6 +124,10 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 // world.maxz is already the last map z, but at save time (during play)
 // it is the last z overall, so it is cut off here. CentCom (z 1,
 // compiled in) is below station_start and is not a map z-level.
+// Runtime turf-reservation levels are also excluded: they are marked
+// with the ZTRAIT_RESERVED trait and are runtime scratch space, not
+// persistent world state, so they are never saved. Implemented with
+// AI architecting.
 /proc/persistence_world_map_zs()
 	var/start = SSmapping?.station_start || 1
 	var/end = world.maxz
@@ -132,6 +136,8 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 		end = transit_z - 1
 	var/list/zs = list()
 	for(var/z in start to end)
+		if(SSmapping?.level_trait(z, ZTRAIT_RESERVED))
+			continue
 		zs += z
 	return zs
 
@@ -336,6 +342,20 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 		return FALSE
 	var/list/zs = list()
 	M["z_levels"] >> zs
+	if(!length(zs))
+		return FALSE
+	// Skip any z-level that is not part of the current map's savable
+	// set — e.g. runtime reservation levels from an older save, which
+	// are no longer saved. They are runtime scratch space, not
+	// persistent world state, so there is nothing to restore there;
+	// they stay as the fresh map's empty space. Implemented with AI
+	// architecting.
+	var/list/map_zs = persistence_world_map_zs()
+	var/list/filtered = list()
+	for(var/z in zs)
+		if(z in map_zs)
+			filtered += z
+	zs = filtered
 	if(!length(zs))
 		return FALSE
 	// Read and validate every z-level before touching the world.
