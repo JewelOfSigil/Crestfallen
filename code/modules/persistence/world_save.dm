@@ -309,14 +309,18 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 // map — a hard recovery hold that halts boot is a follow-up.
 /proc/persistence_load_world()
 	var/map_name = persistence_world_name()
+	log_world("Persistence: looking for a world save for [map_name]...")
 	var/list/generations = persistence_world_generations()
 	if(!length(generations))
+		log_world("Persistence: no world save generations found for [map_name]; booting on the fresh map.")
 		return FALSE
+	log_world("Persistence: found [length(generations)] world save generation(s) for [map_name]; trying the newest first.")
 	for(var/generation in generations)
 		var/dir = "[persistence_world_map_dir()][generation]/"
 		if(!fexists("[dir]complete"))
 			log_world("Persistence: world save generation [generation] has no completion marker — incomplete, trying the previous generation.")
 			continue
+		log_world("Persistence: trying world save generation [generation]...")
 		if(persistence_load_generation(dir, map_name))
 			log_world("Persistence: world save loaded from generation [generation].")
 			return TRUE
@@ -358,18 +362,23 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 	zs = filtered
 	if(!length(zs))
 		return FALSE
+	log_world("Persistence: generation for [map_name] passed the meta check; reading and validating [length(zs)] z-level file(s) ([english_list(zs)])...")
 	// Read and validate every z-level before touching the world.
 	var/list/z_data = list()
 	for(var/z in zs)
+		log_world("Persistence: reading z[z] save file...")
 		var/list/data = persistence_world_read_z(dir, z)
 		if(!data)
 			return FALSE
+		log_world("Persistence: z[z] validated ([length(data["turfs"])] turf entries, [length(data["atoms"])] atom entries).")
 		z_data["[z]"] = data
 	// All valid. Remove the in-scope atoms first, so the saved atoms
 	// are not duplicated on top of the fresh map's. Landmarks are
 	// left alone (they self-delete after loading), and loot spawners
 	// are left alone so they can replenish taken loot.
+	log_world("Persistence: all z-level files validated; clearing the fresh map's atoms...")
 	persistence_world_clear_atoms()
+	log_world("Persistence: fresh map's atoms cleared; restoring the saved world...")
 	// Suppress container population while the atoms are rebuilt, so a
 	// restored container does not fill itself with its defaults on
 	// top of its saved contents. The per-item flag (set on each
@@ -378,8 +387,11 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 	// synchronously.
 	GLOB.persistence_suppress_populate = TRUE
 	for(var/z in zs)
+		log_world("Persistence: restoring z[z] ([length(z_data["[z]"]["turfs"])] turfs, [length(z_data["[z]"]["atoms"])] atoms)...")
 		persistence_world_restore_z(z_data["[z]"], z)
+		log_world("Persistence: z[z] restored.")
 	GLOB.persistence_suppress_populate = FALSE
+	log_world("Persistence: world restore complete for [map_name].")
 	return TRUE
 
 // Read one z-level savefile and validate it (version, counts,
