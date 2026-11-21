@@ -151,10 +151,12 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 // architecting.
 GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 
-// A numeric key for a turf position. Unique while x and y stay under
-// 1000 and z under 1000, which holds for Dun World (450 x 255).
+// A key for a turf position, for the baseline assoc list. It must
+// be a string: a numeric key would be treated as a list index, and
+// a turf key (up to the millions) is far beyond the list's length,
+// which runtimes as "list index out of bounds".
 /proc/persistence_turf_key(x, y, z)
-	return x + y * 1000 + z * 1000000
+	return "[x],[y],[z]"
 
 // Capture the map-default turf types into the baseline. Runs once at
 // boot, after loadWorld() and before the world save is overlaid, so
