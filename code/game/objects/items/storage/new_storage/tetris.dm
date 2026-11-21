@@ -634,13 +634,11 @@
 	// The cell background is added by the grid display whenever the
 	// container is opened, whether or not this item has a recorded
 	// cell — a restored item has none — so it is cleared on every
-	// removal, not only when a cell was recorded. Only the grid cell
-	// background is removed: an item can carry its own underlays (a
-	// perfume's liquid, a flask's filling), and those stay. Both
-	// footprints are tried, in case the item was flipped after the
-	// background was added. Implemented with AI architecting.
-	removed.underlays -= get_bound_underlay(removed.grid_width, removed.grid_height)
-	removed.underlays -= get_bound_underlay(removed.grid_height, removed.grid_width)
+	// removal, not only when a cell was recorded. Removing just the
+	// cell background by matching it did not reliably clear it, so
+	// the underlays are cleared outright here, as they were before
+	// that change. Implemented with AI architecting.
+	removed.underlays = null
 	return had_cell
 
 /datum/component/storage/proc/update_item(obj/item/item)
