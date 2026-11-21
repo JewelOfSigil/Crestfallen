@@ -41,13 +41,16 @@
 /// again would accumulate it endlessly. Implemented with AI
 /// architecting.
 /obj/effect/spawner/lootdrop/proc/should_spawn()
+	if(!loc)
+		// Nowhere to put the loot (not on a turf, not in a container
+		// — e.g. a spawner being processed before it is placed).
+		// Do not fire.
+		return FALSE
 	if(!isturf(loc))
 		// Inside a container: fire only if the container is empty.
 		var/atom/container = loc
 		return !length(container.contents)
 	var/turf/T = loc
-	if(!T)
-		return FALSE
 	// On a turf: fire only if there are no items on the turf.
 	for(var/obj/item/I in T)
 		return FALSE
