@@ -141,6 +141,14 @@
 		//Being destroyed, just move to nullspace now (so it's not in contents for the icon update)
 		AM.moveToNullspace()
 	refresh_mob_views()
+	// Implemented with AI architecting.
+	// Persistence: the refresh above re-orients what is left in the
+	// container, and a first removal from a restored container could
+	// leave the taken item still carrying its grid cell. Clear it once
+	// more now that the views have settled, so nothing removed keeps
+	// rendering at its container grid cell.
+	if(new_location)
+		_removal_reset(AM)
 	if(isobj(parent))
 		var/obj/O = parent
 		O.update_icon()

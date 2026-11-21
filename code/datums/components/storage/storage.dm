@@ -484,6 +484,11 @@
 /datum/component/storage/proc/_remove_and_refresh(datum/source, atom/movable/thing)
 	_removal_reset(thing)
 	refresh_mob_views()
+	// Implemented with AI architecting.
+	// Persistence: same re-clear as in the concrete removal — the
+	// refresh can re-orient the container's contents, so make sure the
+	// thing that just left is not still carrying its grid cell.
+	_removal_reset(thing)
 
 //Call this proc to handle the removal of an item from the storage item. The item will be moved to the new_location target, if that is null it's being deleted
 /datum/component/storage/proc/remove_from_storage(atom/movable/AM, atom/new_location)

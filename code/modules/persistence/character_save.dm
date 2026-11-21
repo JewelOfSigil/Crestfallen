@@ -776,6 +776,14 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			I = new item_type(H.loc, entry["quantity"])
 		else
 			I = new item_type(H.loc)
+		// Persistence: mark a restored container so its deferred
+		// PopulateContents() stays off even if the global suppress flag
+		// clears before the spawn(0) callback runs. The coin-pouch
+		// subtypes populate through that deferred call, and their
+		// default piles were landing on top of the saved coins.
+		if(istype(I, /obj/item/storage))
+			var/obj/item/storage/S = I
+			S.persistence_no_defaults = TRUE
 		// A container can fill itself in Initialize() — a pre-packed box,
 		// a stocked pouch — and the save already records the exact
 		// contents it had, so anything already inside a freshly created

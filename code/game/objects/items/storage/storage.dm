@@ -6,6 +6,13 @@
 	var/list/populate_contents = list()
 	obj_flags = CAN_BE_HIT
 	var/preload = FALSE
+	// Implemented with AI architecting.
+	// Persistence: set on a container restored from a save, so its
+	// deferred PopulateContents() stays off even if the global suppress
+	// flag has already cleared by the time the spawn(0) callback runs.
+	// The coin-pouch subtypes' default coins were slipping through on
+	// exactly that timing. Only read once, in Initialize()'s spawn(0).
+	var/persistence_no_defaults = FALSE
 
 /obj/item/storage/get_mechanics_examine(mob/user)
 	. = ..()
@@ -25,8 +32,10 @@
 		// container must come back exactly as saved — its defaults stay
 		// out. (The flag is set by apply_to() and cleared a tick later,
 		// after every PopulateContents scheduled during the load has
-		// checked it.)
-		if(!GLOB.persistence_suppress_populate)
+		// checked it.) A container restored from a save also carries its
+		// own persistence_no_defaults, so the suppression holds even if
+		// the global flag has already cleared when this callback runs.
+		if(!GLOB.persistence_suppress_populate && !persistence_no_defaults)
 			PopulateContents() // the atom's already been successfully initialized no matter what happens past this point anyway
 
 		for (var/obj/item/item in src)
