@@ -84,6 +84,16 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 /proc/persistence_world_type_vars(obj/O)
 	if(istype(O, /obj/structure/mineral_door))
 		return list("door_opened", "locked")
+	// Tent kits and their components. The kit's assembled state, its
+	// stable id, its repair debts, and its roof's turf coordinates
+	// (as "x,y,z" strings) are saved, so a load can re-link the kit
+	// to the walls, doors, and roof it placed. A component saves the
+	// owning kit's id (the reference itself does not survive a
+	// savefile) and its integrity, so a damaged wall stays damaged.
+	if(istype(O, /obj/item/tent_kit))
+		return list("assembled", "tent_id", "repair_debt_cloth", "repair_debt_silk", "parts_destroyed_count", "roof_turf_coords", "roof_tile_coords")
+	if(istype(O, /obj/structure/tent_component))
+		return list("parent_tent_id", "obj_integrity")
 	return null
 
 // The loaded world's name, sanitised for a folder name (lowercase
@@ -254,6 +264,12 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 	if(!length(zs))
 		log_world("Persistence: world save failed — no map z-levels found.")
 		return FALSE
+	// Tent kits: give every kit (and its components and roof) a
+	// stable id before anything is saved, so a load can re-link
+	// them. This also covers kits placed before the tent-id fix,
+	// whose components carry no id yet.
+	for(var/obj/item/tent_kit/K in world)
+		K.ensure_tent_id()
 	var/generation = persistence_world_generation_name()
 	var/dir = "[persistence_world_map_dir()][generation]/"
 	var/turf_total = 0
@@ -461,6 +477,11 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 		persistence_world_restore_z(z_data["[z]"], z)
 		log_world("Persistence: z[z] restored.")
 	GLOB.persistence_suppress_populate = FALSE
+	// Tent kits: re-link each restored kit to the walls, doors, and
+	// roof it placed. Without this the kit comes back as though
+	// unused (a fresh set of components inside it) and its tent
+	// becomes a permanent structure with no way to disassemble it.
+	persistence_relink_tents()
 	log_world("Persistence: world restore complete for [map_name].")
 	return TRUE
 
@@ -550,6 +571,46 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 	for(var/obj/K in kids)
 		persistence_world_delete_atom(K)
 	qdel(O)
+
+// Re-link tent kits to their components after a load. A kit's walls,
+// doors, and roof are tied to it by object references, which do not
+// survive a savefile round-trip, so the save records a plain-string
+// tent_id on the kit and a parent_tent_id on each component instead.
+// This runs after every z-level is restored, so all kits and
+// components exist. It discards the fresh components each restored
+// kit's Initialize created (they carry no parent_tent_id, so they are
+// the duplicates, not the saved ones), rebuilds each kit's lists
+// from the restored components, and restores the assembled kit's
+// hidden state and roof. A component whose kit is gone stays
+// orphaned, as a standalone structure. A component that was crafted
+// on its own (a tent door with no kit) carries no id and is left
+// alone.
+/proc/persistence_relink_tents()
+	var/list/kits_by_id = list()
+	for(var/obj/item/tent_kit/K in world)
+		if(K.tent_id)
+			kits_by_id[K.tent_id] = K
+	if(!length(kits_by_id))
+		return
+	for(var/tent_id in kits_by_id)
+		var/obj/item/tent_kit/K = kits_by_id[tent_id]
+		for(var/obj/structure/tent_component/C in K.contents.Copy())
+			if(!C.parent_tent_id)
+				qdel(C)
+		K.tent_walls.Cut()
+		K.tent_doors.Cut()
+	for(var/obj/structure/tent_component/C in world)
+		var/tent_id = C.parent_tent_id
+		if(!tent_id)
+			continue
+		var/obj/item/tent_kit/K = kits_by_id[tent_id]
+		if(!K)
+			continue
+		K.link_component(C)
+	for(var/tent_id in kits_by_id)
+		var/obj/item/tent_kit/K = kits_by_id[tent_id]
+		K.restore_assembled_state()
+		K.restore_roof()
 
 // Recreate one saved atom from its entry (type, x, y, vars,
 // contents), at the z-level of the file it came from. The atom is

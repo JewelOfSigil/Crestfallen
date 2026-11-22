@@ -1,6 +1,16 @@
+// Implemented with AI architecting: a stable identity for tent kits,
+// so the world save can re-link a kit to the walls, doors, and roof
+// it placed. Object references do not survive a savefile round-trip,
+// so the kit and its components share this plain-string id instead.
+var/global/tent_kit_uid = 0
+
 // === BASE TENT COMPONENT ===
 /obj/structure/tent_component
 	var/obj/item/tent_kit/parent_tent = null
+	// Implemented with AI architecting: the owning kit's tent_id, so
+	// a world-save load can match a restored component to its kit.
+	// (The parent_tent reference itself does not survive a savefile.)
+	var/parent_tent_id = null
 	anchored = TRUE
 	invisibility = 0
 
@@ -14,6 +24,13 @@
 	grid_width = 32
 	grid_height = 96
 	var/assembled = FALSE
+	// Implemented with AI architecting: stable identity for the world
+	// save (see the global counter above), and the roof's turf
+	// coordinates, rebuilt from the live roof lists at save time so a
+	// load can rebuild them and re-apply pseudo_roof.
+	var/tent_id
+	var/list/roof_turf_coords = list()
+	var/list/roof_tile_coords = list()
 	var/list/obj/structure/tent_wall/tent_walls = list()
 	var/list/obj/structure/roguetent/tent_doors = list()
 	var/list/turf/roof_tiles = list()
@@ -46,7 +63,84 @@
 
 /obj/item/tent_kit/Initialize(mapload)
 	. = ..()
+	// Implemented with AI architecting: give the kit its stable id
+	// before its components are created, so they can be matched to
+	// it again after a world-save load.
+	if(!tent_id)
+		tent_kit_uid++
+		tent_id = "tent-[tent_kit_uid]-[rand(1000, 9999)]"
 	create_tent_components()
+
+// Implemented with AI architecting: prepares the kit (and its
+// components and roof) for a world save. Gives the kit an id if it
+// has none — covering kits placed before this fix — marks every
+// component in its lists with that id, and records the roof's turf
+// coordinates as "x,y,z" strings, since turf references do not
+// survive a savefile. Called by the world save before any atom is
+// written, so every component is marked before it is saved.
+/obj/item/tent_kit/proc/ensure_tent_id()
+	if(!tent_id)
+		tent_kit_uid++
+		tent_id = "tent-[tent_kit_uid]-[rand(1000, 9999)]"
+	for(var/obj/structure/tent_wall/wall in tent_walls)
+		wall.parent_tent_id = tent_id
+	for(var/obj/structure/roguetent/door in tent_doors)
+		door.parent_tent_id = tent_id
+	roof_turf_coords = list()
+	for(var/turf/T in roof_turfs)
+		roof_turf_coords += "[T.x],[T.y],[T.z]"
+	roof_tile_coords = list()
+	for(var/turf/T in roof_tiles)
+		roof_tile_coords += "[T.x],[T.y],[T.z]"
+
+// Implemented with AI architecting: re-links one component restored
+// from a world save to this kit. Sets the reference, files it in the
+// right list, and — when the kit is assembled — re-registers the
+// part-destroyed and part-moved signals, which are not saved.
+/obj/item/tent_kit/proc/link_component(obj/structure/tent_component/C)
+	C.parent_tent = src
+	if(istype(C, /obj/structure/tent_wall))
+		tent_walls += C
+	else if(istype(C, /obj/structure/roguetent))
+		tent_doors += C
+	if(assembled)
+		RegisterSignal(C, COMSIG_PARENT_QDELETING, PROC_REF(part_destroyed))
+		RegisterSignal(C, COMSIG_MOVABLE_MOVED, PROC_REF(part_moved))
+
+// Implemented with AI architecting: restores the assembled kit's
+// hidden, anchored state after a world-save load. The invisibility,
+// mouse opacity, and anchored flag are not among the vars the world
+// save records, so the load re-applies them here from assembled.
+/obj/item/tent_kit/proc/restore_assembled_state()
+	if(!assembled)
+		return
+	invisibility = INVISIBILITY_MAXIMUM
+	mouse_opacity = MOUSE_OPACITY_TRANSPARENT
+	anchored = TRUE
+
+// Implemented with AI architecting: rebuilds the roof lists from the
+// saved turf coordinates, and re-applies pseudo_roof to the interior
+// turfs (a turf var the save does not record). A roof turf is only
+// kept if it is still a twig floor, so a turf that has since changed
+// is not reverted by a later disassembly.
+/obj/item/tent_kit/proc/restore_roof()
+	roof_turfs = list()
+	for(var/coord in roof_turf_coords)
+		var/list/parts = splittext(coord, ",")
+		if(parts.len < 3)
+			continue
+		var/turf/T = locate(text2num(parts[1]), text2num(parts[2]), text2num(parts[3]))
+		if(T && istype(T, /turf/open/floor/rogue/twig))
+			roof_turfs += T
+	roof_tiles = list()
+	for(var/coord in roof_tile_coords)
+		var/list/parts = splittext(coord, ",")
+		if(parts.len < 3)
+			continue
+		var/turf/T = locate(text2num(parts[1]), text2num(parts[2]), text2num(parts[3]))
+		if(T)
+			T.pseudo_roof = TRUE
+			roof_tiles += T
 
 /obj/item/tent_kit/proc/create_tent_components()
 	var/max_walls = get_max_walls()
