@@ -559,6 +559,17 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			entry["malumblessed"] = TRUE
 	if(I.name != initial(I.name))
 		entry["name"] = I.name
+	// Worn-layer setting. Clothing with a middle-click layer toggle
+	// (cloaks, robes, tabards, masks, neck items) flips its overarmor
+	// var and sets alternate_worn_layer from it; alternate_worn_layer
+	// is the base /obj/item var the worn sprite is actually drawn on.
+	// Both are recorded when they differ from the type default, so the
+	// layer comes back and the next middle-click toggles from the saved
+	// state instead of the type default. Old saves omit them.
+	if(!isnull(I.alternate_worn_layer) && I.alternate_worn_layer != initial(I.alternate_worn_layer))
+		entry["alternate_worn_layer"] = I.alternate_worn_layer
+	if(("overarmor" in I.vars) && I.overarmor != initial(I.overarmor))
+		entry["overarmor"] = I.overarmor
 	var/list/kids = list()
 	for(var/obj/item/K in I.contents)
 		kids += list(save_item(H, K, I))
@@ -1098,6 +1109,14 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		W.malumblessed_w = TRUE
 	if(entry["name"])
 		I.name = entry["name"]
+	// Worn-layer setting, restored before the item is placed or
+	// equipped so build_worn_icon reads the saved layer. The layer
+	// itself so the sprite draws correctly, and overarmor so the next
+	// middle-click toggles from the saved state. Old saves omit both.
+	if(!isnull(entry["alternate_worn_layer"]))
+		I.alternate_worn_layer = entry["alternate_worn_layer"]
+	if(("overarmor" in I.vars) && !isnull(entry["overarmor"]))
+		I.overarmor = entry["overarmor"]
 
 // Put a restored item on its saved grid cell, or the first free cell.
 // The coordinate lives in the container's storage component, not on
