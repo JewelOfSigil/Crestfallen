@@ -563,13 +563,18 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// (cloaks, robes, tabards, masks, neck items) flips its overarmor
 	// var and sets alternate_worn_layer from it; alternate_worn_layer
 	// is the base /obj/item var the worn sprite is actually drawn on.
-	// Both are recorded when they differ from the type default, so the
-	// layer comes back and the next middle-click toggles from the saved
-	// state instead of the type default. Old saves omit them.
+	// Both are recorded so the layer comes back and the next
+	// middle-click toggles from the saved state instead of the type
+	// default. overarmor is declared only on some clothing subtypes,
+	// not on /obj/item, so it is read through vars — a static access
+	// (I.overarmor, or initial(I.overarmor)) does not compile here —
+	// and it is recorded whenever it is set (a middle-click always
+	// leaves it TRUE or FALSE; an unset one is the type default and
+	// is left out). Old saves omit both fields.
 	if(!isnull(I.alternate_worn_layer) && I.alternate_worn_layer != initial(I.alternate_worn_layer))
 		entry["alternate_worn_layer"] = I.alternate_worn_layer
-	if(("overarmor" in I.vars) && I.overarmor != initial(I.overarmor))
-		entry["overarmor"] = I.overarmor
+	if(("overarmor" in I.vars) && !isnull(I.vars["overarmor"]))
+		entry["overarmor"] = I.vars["overarmor"]
 	var/list/kids = list()
 	for(var/obj/item/K in I.contents)
 		kids += list(save_item(H, K, I))
@@ -1112,11 +1117,13 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// Worn-layer setting, restored before the item is placed or
 	// equipped so build_worn_icon reads the saved layer. The layer
 	// itself so the sprite draws correctly, and overarmor so the next
-	// middle-click toggles from the saved state. Old saves omit both.
+	// middle-click toggles from the saved state. overarmor is written
+	// through vars for the same reason it is read that way (it is not
+	// a var on /obj/item). Old saves omit both.
 	if(!isnull(entry["alternate_worn_layer"]))
 		I.alternate_worn_layer = entry["alternate_worn_layer"]
 	if(("overarmor" in I.vars) && !isnull(entry["overarmor"]))
-		I.overarmor = entry["overarmor"]
+		I.vars["overarmor"] = entry["overarmor"]
 
 // Put a restored item on its saved grid cell, or the first free cell.
 // The coordinate lives in the container's storage component, not on
