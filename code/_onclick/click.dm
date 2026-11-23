@@ -218,14 +218,9 @@
 	if(modifiers["shift"])
 		ShiftClickOn(A)
 		return
-	// Implemented with AI architecting: re-enable the plain Alt-click
-	// dispatch. It was commented out, so an Alt+left-click fell
-	// through to a normal left-click and no atom's AltClick ever ran
-	// — including the bed claim, and the other Alt-click interactions
-	// already in the code (storage, clothing toggles, and the rest).
-	if(modifiers["alt"]) // alt and alt-gr (rightalt)
-		AltClickOn(A)
-		return
+//	if(modifiers["alt"]) // alt and alt-gr (rightalt)
+//		AltClickOn(A)
+//		return
 //	if(modifiers["ctrl"])
 //		CtrlClickOn(A)
 //		return
@@ -861,11 +856,6 @@ GLOBAL_LIST_EMPTY(reach_dummy_pool)
 	. = SEND_SIGNAL(src, COMSIG_MOB_ALTCLICKON, A)
 	if(. & COMSIG_MOB_CANCEL_CLICKON)
 		return
-	// Implemented with AI architecting: actually call the atom's
-	// AltClick. The proc only sent the signal and returned, so even
-	// with the dispatch restored no atom's AltClick ever ran. (The
-	// Shift- and Ctrl-click handlers both make this call.)
-	A.AltClick(src)
 
 /atom/proc/AltClick(mob/user)
 	SEND_SIGNAL(src, COMSIG_CLICK_ALT, user)
