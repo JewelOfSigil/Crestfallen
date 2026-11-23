@@ -47,6 +47,9 @@
 	if(claimed_by == H.real_name)
 		to_chat(H, span_notice("This bed is already yours."))
 		return TRUE
+	var/confirm = alert(H, "Claim [src] as your home? You will return here when you rejoin.", "Claim bed", "Yes", "No")
+	if(confirm != "Yes")
+		return FALSE
 	var/obj/structure/bed/old_bed = H.claimed_home_bed
 	if(old_bed && !QDELETED(old_bed) && old_bed != src)
 		old_bed.claimed_by = null
