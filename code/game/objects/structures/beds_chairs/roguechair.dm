@@ -400,6 +400,7 @@
 	// right-click itself rotates); the character returns to their
 	// claimed bed, or to a bedroll they placed, when they rejoin.
 	. += span_info("Middle-click an unclaimed bed to claim it as your home. You will return to it when you rejoin, unless you are using a bedroll you placed instead.")
+	. += span_info("Middle-click your own claimed bed to leave the round from there, the same as using a far travel point. You will come back where you left from.")
 	if(claimed_by)
 		. += span_info("This bed is claimed by [claimed_by].")
 	. += span_info("Once laying down on a bed, you can close your eyes by clicking the small arrows that border the top-and-bottom of your HUD's eye. If your eyes are closed and you're laying down, you'll begin to drift off into sleep.")
@@ -457,16 +458,25 @@
 		rotcomp.HandRot(rotcomp,user,ROTATION_CLOCKWISE)
 
 // Implemented with AI architecting: middle-click claims an
-// unclaimed, non-tavern bed as the player's home. Middle-click is
-// used (rather than the right-click, which rotates, or Alt-click,
-// whose dispatch is disabled) so claiming never interferes with
-// rotation. The right-click context menu is disabled for non-admin
-// players, so the claim uses the direct click itself, not a menu
-// entry. A bed that cannot be claimed does nothing here.
+// unclaimed, non-tavern bed as the player's home, and offers Far
+// Travel from a bed that is already theirs. Middle-click is used
+// (rather than the right-click, which rotates, or Alt-click, whose
+// dispatch is disabled) so claiming never interferes with rotation.
+// The right-click context menu is disabled for non-admin players,
+// so both use the direct click itself, not a menu entry. A bed that
+// cannot be claimed does nothing here.
 /obj/structure/bed/rogue/MiddleClick(mob/user, params)
 	. = ..()
-	if(ishuman(user) && !tavern_property && !claimed_by && !istype(src, /obj/structure/bed/rogue/bedroll))
-		var/mob/living/carbon/human/H = user
+	if(!ishuman(user))
+		return
+	var/mob/living/carbon/human/H = user
+	// Their own claimed bed: middle-click offers Far Travel, so a
+	// player can leave the round at their home — and come back where
+	// they left from, since a Far Travel save skips the anchors.
+	if(claimed_by == H.real_name)
+		far_travel_depart(H, H, src)
+		return
+	if(!tavern_property && !claimed_by && !istype(src, /obj/structure/bed/rogue/bedroll))
 		claim_bed(H)
 
 /obj/structure/bed/rogue/shit

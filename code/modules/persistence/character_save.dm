@@ -195,6 +195,12 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/bedroll_y = 0
 	var/bedroll_z = 0
 	var/bedroll_area_type
+	// Whether this save was made by a Far Travel departure, rather
+	// than by the restart. A character who leaves by Far Travel
+	// comes back where they left from, not at their anchors — Far
+	// Travel is not a way to fast-travel home. A restart save uses
+	// the anchors as usual.
+	var/left_via_fartravel = FALSE
 	// Treasury. Plain text, never a reference.
 	var/primary_treasury_id = ""
 	// Why the last save failed, for the logs. Empty when the last save worked.
@@ -246,7 +252,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 // Save a character as they are, living or dead. The dead-refusal belongs to
 // the Far Travel hook, not here: the restart and test-verb saves need dead
 // characters saved exactly as they are, where they are.
-/datum/character_save/proc/save_character(mob/living/carbon/human/H)
+/datum/character_save/proc/save_character(mob/living/carbon/human/H, via_fartravel = FALSE)
 	if(!H || !H.real_name)
 		save_error = "no character or no name"
 		return FALSE
@@ -258,6 +264,11 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	if(!save_ckey)
 		save_error = "no ckey"
 		return FALSE
+
+	// How this character left the round. A Far Travel departure is
+	// recorded as one, so the character comes back where they left
+	// from; a restart save is not.
+	left_via_fartravel = via_fartravel ? TRUE : FALSE
 
 	// Identity.
 	src.ckey = save_ckey
@@ -538,6 +549,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["bedroll_y"], bedroll_y)
 	WRITE_FILE(S["bedroll_z"], bedroll_z)
 	WRITE_FILE(S["bedroll_area_type"], bedroll_area_type)
+	WRITE_FILE(S["left_via_fartravel"], left_via_fartravel)
 	WRITE_FILE(S["primary_treasury_id"], primary_treasury_id)
 	return TRUE
 
@@ -720,6 +732,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	S["bedroll_y"] >> bedroll_y
 	S["bedroll_z"] >> bedroll_z
 	S["bedroll_area_type"] >> bedroll_area_type
+	S["left_via_fartravel"] >> left_via_fartravel
 	S["primary_treasury_id"] >> primary_treasury_id
 	return TRUE
 
@@ -964,27 +977,19 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 				F.add_member(H)
 				break
 
-	// Placement: the anchor system. An active bedroll — one the
-	// character placed themself — comes first, then their claimed
-	// static home, then the saved location. (The nearest safezone
-	// landmark sits between the home and the saved location once
-	// safezones exist; they are not built yet.) Each anchor is
-	// verified against the loaded world, not trusted from the save
-	// alone: the bedroll must still be unfurled at its saved spot,
-	// and the bed must still be there and still claimed by this
-	// character. A verified anchor is also restored onto the mob, so
-	// the next save keeps it. An unverified anchor falls through to
-	// the next one, so a rolled-up bedroll or a lost bed simply
-	// wakes the character where they were saved.
-	var/turf/place_at
+	// Anchors: resolve the saved bedroll and home against the loaded
+	// world and restore them onto the mob, so the next save keeps
+	// them — whether or not the character wakes at one of them. A
+	// bedroll must still be unfurled at its saved spot, and a bed
+	// must still be there and still claimed by this character. An
+	// unverified anchor is simply not there.
 	if(bedroll_x && bedroll_y && bedroll_z)
 		var/turf/bedroll_turf = locate(bedroll_x, bedroll_y, bedroll_z)
 		if(bedroll_turf)
 			for(var/obj/structure/bed/rogue/bedroll/roll in bedroll_turf)
 				H.active_bedroll = roll
-				place_at = bedroll_turf
 				break
-	if(!place_at && home_x && home_y && home_z)
+	if(home_x && home_y && home_z)
 		var/turf/home_turf = locate(home_x, home_y, home_z)
 		if(home_turf)
 			for(var/obj/structure/bed/B in home_turf)
@@ -992,8 +997,20 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 					continue
 				if(B.claimed_by == H.real_name)
 					H.claimed_home_bed = B
-					place_at = home_turf
 					break
+
+	// Placement. A character who left by Far Travel comes back where
+	// they left from — Far Travel is not a way to fast-travel home —
+	// so a far-travel save skips the anchors and wakes at the saved
+	// location. Any other save (a restart) wakes at the active
+	// bedroll first, then the claimed home, then the saved location.
+	// (The nearest safezone landmark sits between the home and the
+	// saved location once safezones exist; they are not built yet.)
+	var/turf/place_at
+	if(!left_via_fartravel && H.active_bedroll)
+		place_at = get_turf(H.active_bedroll)
+	if(!place_at && !left_via_fartravel && H.claimed_home_bed)
+		place_at = get_turf(H.claimed_home_bed)
 	if(!place_at && loc_x && loc_y && loc_z)
 		place_at = locate(loc_x, loc_y, loc_z)
 	if(place_at)

@@ -23,7 +23,6 @@
 	if(in_use) // Someone's already going in.
 		return
 	var/mob/living/carbon/human/departing_mob = dropping
-	var/datum/job/mob_job
 	// Persistence (Prototype 1): the dead cannot depart, by themselves or by
 	// another's hand. Implemented with AI architecting.
 	if(departing_mob.stat == DEAD)
@@ -32,18 +31,37 @@
 	if(departing_mob != user && departing_mob.client)
 		to_chat(user, "<span class='warning'>This one retains their free will. It's their choice if they want to leave the round or not.</span>")
 		return
-	if(alert(user, "Are you sure you want to [departing_mob == user ? "depart the round for good (you" : "send this person away (they"] will be removed from the current round, and their role's slot will reopen for another to take)?", "Departing", "Confirm", "Cancel") != "Confirm")
-		return
-	if(user.incapacitated() || QDELETED(departing_mob) || (departing_mob != user && departing_mob.client) || get_dist(src, dropping) > 2 || get_dist(src, user) > 2)
-		return //Things have changed since the alert happened.
-	user.visible_message("<span class='warning'>[user] [departing_mob == user ? "is trying to depart from [SSticker.realm_name]!" : "is trying to send [departing_mob] away!"]</span>", "<span class='notice'>You [departing_mob == user ? "are trying to depart from [SSticker.realm_name]." : "are trying to send [departing_mob] away."]</span>")
 	in_use = TRUE
-	if(!do_after(user, 50, target = src))
-		in_use = FALSE
-		return
+	far_travel_depart(departing_mob, user, src)
 	in_use = FALSE
 	update_icon()
-	var/dat = "[ADMIN_LOOKUPFLW(user)] has despawned [departing_mob == user ? "themselves" : departing_mob], job [departing_mob.job], at [AREACOORD(src)]. Contents despawned along:"
+
+// Implemented with AI architecting: the shared Far Travel departure.
+// This is the whole departure once the drag-specific checks are done:
+// the confirmation, the re-checks, the do-after, the job and role
+// cleanup, the character save, the bounty and treasury cleanup, and
+// the removal of the mob. Both the far travel point (dragging a
+// character onto it) and a character's own claimed bed (middle-click)
+// use it, so leaving the round is the same whichever way it starts.
+// departure_point is the thing being departed from — the far travel
+// point or the bed — used for the distance check and the log location.
+// Returns TRUE when the character departed, FALSE when it was
+// cancelled or failed.
+/proc/far_travel_depart(mob/living/carbon/human/departing_mob, mob/user, atom/departure_point)
+	if(!departing_mob || !user || !departure_point)
+		return FALSE
+	if(departing_mob.stat == DEAD)
+		to_chat(user, "<span class='warning'>The dead cannot depart. [departing_mob] must remain here.</span>")
+		return FALSE
+	if(alert(user, "Are you sure you want to [departing_mob == user ? "depart the round for good (you" : "send this person away (they"] will be removed from the current round, and their role's slot will reopen for another to take)?", "Departing", "Confirm", "Cancel") != "Confirm")
+		return FALSE
+	if(user.incapacitated() || QDELETED(departing_mob) || (departing_mob != user && departing_mob.client) || get_dist(departure_point, departing_mob) > 2 || get_dist(departure_point, user) > 2)
+		return FALSE //Things have changed since the alert happened.
+	user.visible_message("<span class='warning'>[user] [departing_mob == user ? "is trying to depart from [SSticker.realm_name]!" : "is trying to send [departing_mob] away!"]</span>", "<span class='notice'>You [departing_mob == user ? "are trying to depart from [SSticker.realm_name]." : "are trying to send [departing_mob] away."]</span>")
+	if(!do_after(user, 50, target = departure_point))
+		return FALSE
+	var/datum/job/mob_job
+	var/dat = "[ADMIN_LOOKUPFLW(user)] has despawned [departing_mob == user ? "themselves" : departing_mob], job [departing_mob.job], at [AREACOORD(departure_point)]. Contents despawned along:"
 	if(departing_mob.mind)
 		mob_job = SSjob.GetJob(departing_mob.mind.assigned_role)
 		if(mob_job)
@@ -74,11 +92,12 @@
 			content = departing_mob.contents[i]
 			dat += ", [content.name]"
 		dat += "."
-	// Persistence (Prototype 1): save the departing character before the
-	// cleanup below removes their bounties, bank account, and mob.
-	// Implemented with AI architecting.
+	// Persistence: save the departing character before the cleanup
+	// below removes their bounties, bank account, and mob. This is a
+	// Far Travel save, so the character comes back where they left
+	// from, not at their anchors.
 	var/datum/character_save/depart_save = new /datum/character_save()
-	if(!depart_save.save_character(departing_mob))
+	if(!depart_save.save_character(departing_mob, TRUE))
 		log_admin("Persistence: failed to save [departing_mob.real_name] ([departing_mob.ckey]) on Far Travel. Reason: [depart_save.save_error].")
 		to_chat(user, "<span class='warning'>Warning: [departing_mob] could not be saved and may not return.</span>")
 	if(departing_mob.mind)
@@ -130,3 +149,4 @@
 		for(var/thing in embeds)
 			QDEL_NULL(thing)
 	QDEL_NULL(departing_mob)
+	return TRUE
