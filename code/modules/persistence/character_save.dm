@@ -619,6 +619,16 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 			entry["malumblessed"] = TRUE
 	if(I.name != initial(I.name))
 		entry["name"] = I.name
+	// A key's lock is a plain id and hash, not a reference. Record
+	// them when set, so a key still opens its door after a load.
+	// The lockhash is what the door matches against; the lockid is
+	// what the global registry keys on.
+	if(istype(I, /obj/item/roguekey))
+		var/obj/item/roguekey/K = I
+		if(K.lockid)
+			entry["lockid"] = K.lockid
+		if(K.lockhash)
+			entry["lockhash"] = K.lockhash
 	// Worn-layer setting. Clothing with a middle-click layer toggle
 	// (cloaks, robes, tabards, masks, neck items) flips its overarmor
 	// var and sets alternate_worn_layer from it; alternate_worn_layer
@@ -1210,6 +1220,17 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 		W.malumblessed_w = TRUE
 	if(entry["name"])
 		I.name = entry["name"]
+	// A key's lock id and hash, as saved. The key's Initialize
+	// already ran when it was created, with no id set, so it did
+	// not register a hash; these are set directly, and the door
+	// matches on the hash itself. Old saves omit both, so an old
+	// key comes back plain.
+	if(istype(I, /obj/item/roguekey))
+		var/obj/item/roguekey/K = I
+		if(entry["lockid"])
+			K.lockid = entry["lockid"]
+		if(entry["lockhash"])
+			K.lockhash = entry["lockhash"]
 	// Worn-layer setting, restored before the item is placed or
 	// equipped so build_worn_icon reads the saved layer. The layer
 	// itself so the sprite draws correctly, and overarmor so the next

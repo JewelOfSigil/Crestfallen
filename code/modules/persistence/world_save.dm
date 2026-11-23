@@ -80,10 +80,16 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 
 // Per-type extra vars, by typepath. A mineral door's open/closed and
 // locked state live in its own vars, not in density, so they are
-// saved explicitly. More types gain entries here as they need them.
+// saved explicitly — as are its lock id and hash, which are plain
+// values (not references) and are what a key matches against. More
+// types gain entries here as they need them.
 /proc/persistence_world_type_vars(obj/O)
 	if(istype(O, /obj/structure/mineral_door))
-		return list("door_opened", "locked")
+		return list("door_opened", "locked", "lockid", "lockhash")
+	// A key lying in the world (in a chest, on a table) keeps its
+	// lock id and hash the same way a carried one does.
+	if(istype(O, /obj/item/roguekey))
+		return list("lockid", "lockhash")
 	// Tent kits and their components. The kit's assembled state, its
 	// stable id, its repair debts, and its roof's turf coordinates
 	// (as "x,y,z" strings) are saved, so a load can re-link the kit
@@ -644,6 +650,17 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 		for(var/varname in vars)
 			if(varname in O.vars)
 				O.vars[varname] = vars[varname]
+	// A mineral door's lock is a plain id and hash, not a reference.
+	// The door's Initialize already ran when it was created above,
+	// with a fresh random id and hash that it registered in the
+	// globals; the saved values just applied replace them, so
+	// register the saved ones instead — otherwise a key created
+	// later with this door's id would be given the wrong hash.
+	if(istype(O, /obj/structure/mineral_door))
+		var/obj/structure/mineral_door/D = O
+		if(D.lockid && D.lockhash)
+			GLOB.lockids[D.lockid] = D.lockhash
+			GLOB.lockhashes |= D.lockhash
 	var/list/kids = entry[5]
 	if(length(kids))
 		for(var/list/kid in kids)
