@@ -395,11 +395,11 @@
 	. = ..()
 	. += span_info("Click-dragging yourself onto a bed, while on the same tile, will 'buckle' you in; this represents your character laying down. Laying down gradually restores energy, and allows your character to begin sleeping.")
 	// Implemented with AI architecting: bed claiming. An unclaimed,
-	// non-tavern bed is claimed by right-clicking it directly (the
-	// right-click menu is disabled for non-admin players); the
-	// character returns to their claimed bed, or to a bedroll they
-	// placed, when they rejoin.
-	. += span_info("Right-click an unclaimed bed to claim it as your home. You will return to it when you rejoin, unless you are using a bedroll you placed instead.")
+	// non-tavern bed is claimed by Alt+left-clicking it (the
+	// right-click menu is disabled for non-admin players, and the
+	// right-click itself rotates); the character returns to their
+	// claimed bed, or to a bedroll they placed, when they rejoin.
+	. += span_info("Alt-click an unclaimed bed to claim it as your home. You will return to it when you rejoin, unless you are using a bedroll you placed instead.")
 	if(claimed_by)
 		. += span_info("This bed is claimed by [claimed_by].")
 	. += span_info("Once laying down on a bed, you can close your eyes by clicking the small arrows that border the top-and-bottom of your HUD's eye. If your eyes are closed and you're laying down, you'll begin to drift off into sleep.")
@@ -452,20 +452,22 @@
 		unhide(user)
 
 /obj/structure/bed/rogue/attack_right(mob/user)
-	// Implemented with AI architecting: a direct right-click claims
-	// an unclaimed, non-tavern bed as the player's home. The
-	// right-click context menu is disabled for non-admin players, so
-	// the claim uses the direct right-click itself, not a menu entry.
-	// A bed that cannot be claimed falls through to the usual
-	// rotation, so rotation still works on tavern beds, bedrolls,
-	// and beds already claimed (by anyone).
-	if(ishuman(user) && !tavern_property && !claimed_by && !istype(src, /obj/structure/bed/rogue/bedroll))
-		var/mob/living/carbon/human/H = user
-		if(claim_bed(H))
-			return
 	var/datum/component/simple_rotation/rotcomp = GetComponent(/datum/component/simple_rotation)
 	if(rotcomp)
 		rotcomp.HandRot(rotcomp,user,ROTATION_CLOCKWISE)
+
+// Implemented with AI architecting: Alt+left-click claims an
+// unclaimed, non-tavern bed as the player's home. Alt-click is used
+// (rather than the right-click, which rotates) so claiming never
+// interferes with rotation. The right-click context menu is disabled
+// for non-admin players, so the claim uses the direct Alt-click
+// itself, not a menu entry. A bed that cannot be claimed does
+// nothing here.
+/obj/structure/bed/rogue/AltClick(mob/user)
+	. = ..()
+	if(ishuman(user) && !tavern_property && !claimed_by && !istype(src, /obj/structure/bed/rogue/bedroll))
+		var/mob/living/carbon/human/H = user
+		claim_bed(H)
 
 /obj/structure/bed/rogue/shit
 	name = "straw bed"
