@@ -94,6 +94,13 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 		return list("assembled", "tent_id", "repair_debt_cloth", "repair_debt_silk", "parts_destroyed_count", "roof_turf_coords", "roof_tile_coords")
 	if(istype(O, /obj/structure/tent_component))
 		return list("parent_tent_id", "obj_integrity")
+	// Beds: who claimed this bed as their home. A bed is a world
+	// atom, so without this the claim would reset on every restart
+	// and the character's saved home would point at a bed that no
+	// longer knows them. tavern_property is a type default, not
+	// instance state, so it needs no entry here.
+	if(istype(O, /obj/structure/bed))
+		return list("claimed_by")
 	return null
 
 // The loaded world's name, sanitised for a folder name (lowercase

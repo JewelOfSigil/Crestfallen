@@ -21,7 +21,47 @@
 	var/buildstacktype
 	var/buildstackamount = 2
 	var/bolts = TRUE
+	// Implemented with AI architecting: whether this bed is tavern
+	// property (an inn bed), and so cannot be claimed as a home; and
+	// the name of the character who has claimed it as their home, if
+	// any. claimed_by is instance state, so the world save records it.
+	var/tavern_property = FALSE
+	var/claimed_by
 	buckleverb = "lay"
+
+// Implemented with AI architecting: claims this bed as the given
+// character's home. One static home per character — claiming a new
+// bed unclaims the old one. A tavern bed, a bedroll, and a bed
+// claimed by someone else cannot be claimed. Returns TRUE when the
+// bed is (now) theirs.
+/obj/structure/bed/proc/claim_bed(mob/living/carbon/human/H)
+	if(tavern_property)
+		to_chat(H, span_warning("This bed belongs to the tavern — it cannot be claimed as a home."))
+		return FALSE
+	if(istype(src, /obj/structure/bed/rogue/bedroll))
+		to_chat(H, span_warning("A bedroll is no home — only a place to rest on the road."))
+		return FALSE
+	if(claimed_by && claimed_by != H.real_name)
+		to_chat(H, span_warning("This bed is already claimed by [claimed_by]."))
+		return FALSE
+	if(claimed_by == H.real_name)
+		to_chat(H, span_notice("This bed is already yours."))
+		return TRUE
+	var/obj/structure/bed/old_bed = H.claimed_home_bed
+	if(old_bed && !QDELETED(old_bed) && old_bed != src)
+		old_bed.claimed_by = null
+		to_chat(H, span_notice("You give up your claim on [old_bed]."))
+	claimed_by = H.real_name
+	H.claimed_home_bed = src
+	to_chat(H, span_notice("You claim [src] as your home."))
+	return TRUE
+
+// Implemented with AI architecting: gives up this bed's claim, if any.
+// (The claiming character's own record is cleared by claim_bed when
+// they take a new bed; a bed destroyed outright leaves a dangling
+// record, which the character save validates away at save and load.)
+/obj/structure/bed/proc/unclaim_bed()
+	claimed_by = null
 
 /obj/structure/bed/ComponentInitialize()
 	. = ..()

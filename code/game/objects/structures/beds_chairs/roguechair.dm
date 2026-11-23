@@ -394,6 +394,14 @@
 /obj/structure/bed/rogue/get_mechanics_examine(mob/user)
 	. = ..()
 	. += span_info("Click-dragging yourself onto a bed, while on the same tile, will 'buckle' you in; this represents your character laying down. Laying down gradually restores energy, and allows your character to begin sleeping.")
+	// Implemented with AI architecting: bed claiming. An unclaimed,
+	// non-tavern bed is claimed by right-clicking it directly (the
+	// right-click menu is disabled for non-admin players); the
+	// character returns to their claimed bed, or to a bedroll they
+	// placed, when they rejoin.
+	. += span_info("Right-click an unclaimed bed to claim it as your home. You will return to it when you rejoin, unless you are using a bedroll you placed instead.")
+	if(claimed_by)
+		. += span_info("This bed is claimed by [claimed_by].")
 	. += span_info("Once laying down on a bed, you can close your eyes by clicking the small arrows that border the top-and-bottom of your HUD's eye. If your eyes are closed and you're laying down, you'll begin to drift off into sleep.")
 	. += span_info("Most people can't sleep while wearing helmets and chestpieces. Left-click the items-in-question in your inventory to take them off. You can either press the 'Z' key to drop them, or left-click a table or opened closet to set them aside.")
 	. += span_info("If you aren't interrupted, you'll fall asleep after a bit. Sleeping clears the daily 'Tired' debuff and allows you to further learn more skills. The higher your Intelligence is, the more skills - and skill points - you'll earn with each sleep.")
@@ -444,6 +452,17 @@
 		unhide(user)
 
 /obj/structure/bed/rogue/attack_right(mob/user)
+	// Implemented with AI architecting: a direct right-click claims
+	// an unclaimed, non-tavern bed as the player's home. The
+	// right-click context menu is disabled for non-admin players, so
+	// the claim uses the direct right-click itself, not a menu entry.
+	// A bed that cannot be claimed falls through to the usual
+	// rotation, so rotation still works on tavern beds, bedrolls,
+	// and beds already claimed (by anyone).
+	if(ishuman(user) && !tavern_property && !claimed_by && !istype(src, /obj/structure/bed/rogue/bedroll))
+		var/mob/living/carbon/human/H = user
+		if(claim_bed(H))
+			return
 	var/datum/component/simple_rotation/rotcomp = GetComponent(/datum/component/simple_rotation)
 	if(rotcomp)
 		rotcomp.HandRot(rotcomp,user,ROTATION_CLOCKWISE)
@@ -477,6 +496,14 @@
 	if(do_after(user, 2 SECONDS, TRUE, src))
 		var/obj/item/bedroll/new_bedroll = new /obj/item/bedroll(get_turf(src))
 		new_bedroll.color = src.color
+		// Implemented with AI architecting: rolling up a bedroll
+		// orphans it as a temporary home. (Only the roller's own
+		// record is cleared here; anyone else's dangling record is
+		// validated away by the character save and load.)
+		if(ishuman(user))
+			var/mob/living/carbon/human/H = user
+			if(H.active_bedroll == src)
+				H.active_bedroll = null
 		qdel(src)
 
 /obj/item/bedroll
@@ -509,6 +536,12 @@
 	if(do_after(user, 2 SECONDS, TRUE, src))
 		var/obj/structure/bed/rogue/bedroll/new_bedroll = new /obj/structure/bed/rogue/bedroll(get_turf(src))
 		new_bedroll.color = src.color
+		// Implemented with AI architecting: placing a bedroll sets it
+		// as the placer's temporary home. (The pre-placed map
+		// bedrolls never do — only one a player places themself.)
+		if(ishuman(user))
+			var/mob/living/carbon/human/H = user
+			H.active_bedroll = new_bedroll
 		qdel(src)
 
 /obj/item/bedroll/getonmobprop(tag)
@@ -528,6 +561,9 @@
 	buckle_lying = 90
 	sleepy = 3
 	debris = list(/obj/item/grown/log/tree/small = 1)
+	// Implemented with AI architecting: inn beds are tavern property
+	// and cannot be claimed as a home. (Subtypes inherit this.)
+	tavern_property = TRUE
 
 /obj/structure/bed/rogue/inn/wooldouble
 	icon_state = "double_wool"

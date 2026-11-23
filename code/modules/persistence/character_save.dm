@@ -58,6 +58,14 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 // treasury itself does not exist yet; the field stays empty until it does.
 // Declared here, in the persistence module, so no existing file is touched.
 /mob/living/carbon/human/var/primary_treasury_id = ""
+// The bed this character has claimed as their static home, and the
+// bedroll they placed as their temporary home. References only; the
+// save records their positions, and validates them again on load (a
+// rolled-up or destroyed bedroll, or a destroyed bed, is simply no
+// longer there). A bedroll placed by a player sets the temporary home;
+// the pre-placed map bedrolls never do.
+/mob/living/carbon/human/var/obj/structure/bed/claimed_home_bed
+/mob/living/carbon/human/var/obj/structure/bed/rogue/bedroll/active_bedroll
 
 /datum/character_save
 	// Wear slots checked when figuring out where a worn item sits. Handcuffed
@@ -172,8 +180,9 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// Relationships, name-keyed so they stand alone.
 	var/list/known_people = list()
 	var/fellowship_name
-	// Location and anchor. The anchor (bed/home) fields are 0 until the
-	// anchor system lands; until then placement falls back to loc_*.
+	// Location and anchor. The anchor (bed/home) fields are 0 when the
+	// character has no anchor of that kind; placement falls back to
+	// loc_* then.
 	var/loc_x
 	var/loc_y
 	var/loc_z
@@ -182,6 +191,10 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	var/home_y = 0
 	var/home_z = 0
 	var/home_area_type
+	var/bedroll_x = 0
+	var/bedroll_y = 0
+	var/bedroll_z = 0
+	var/bedroll_area_type
 	// Treasury. Plain text, never a reference.
 	var/primary_treasury_id = ""
 	// Why the last save failed, for the logs. Empty when the last save worked.
@@ -419,7 +432,38 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	loc_z = H.z
 	var/area/A = get_area(H)
 	loc_area_type = A?.type
-	// home_* stay 0 until the anchor system (bed claims) lands.
+	// The static home is the bed this character claimed, if it still
+	// exists and is still theirs; the temporary home is the bedroll
+	// they placed, if it is still unfurled where they left it. A
+	// destroyed bed, a bed claimed by someone else since, or a
+	// rolled-up or destroyed bedroll is no anchor at all, and the
+	// dangling record is cleared.
+	var/obj/structure/bed/home_bed = H.claimed_home_bed
+	if(home_bed && !QDELETED(home_bed) && home_bed.claimed_by == H.real_name)
+		home_x = home_bed.x
+		home_y = home_bed.y
+		home_z = home_bed.z
+		var/area/HA = get_area(home_bed)
+		home_area_type = HA?.type
+	else
+		H.claimed_home_bed = null
+		home_x = 0
+		home_y = 0
+		home_z = 0
+		home_area_type = null
+	var/obj/structure/bed/rogue/bedroll/roll = H.active_bedroll
+	if(roll && !QDELETED(roll))
+		bedroll_x = roll.x
+		bedroll_y = roll.y
+		bedroll_z = roll.z
+		var/area/BA = get_area(roll)
+		bedroll_area_type = BA?.type
+	else
+		H.active_bedroll = null
+		bedroll_x = 0
+		bedroll_y = 0
+		bedroll_z = 0
+		bedroll_area_type = null
 
 	// Treasury.
 	primary_treasury_id = H.primary_treasury_id || ""
@@ -490,6 +534,10 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["home_y"], home_y)
 	WRITE_FILE(S["home_z"], home_z)
 	WRITE_FILE(S["home_area_type"], home_area_type)
+	WRITE_FILE(S["bedroll_x"], bedroll_x)
+	WRITE_FILE(S["bedroll_y"], bedroll_y)
+	WRITE_FILE(S["bedroll_z"], bedroll_z)
+	WRITE_FILE(S["bedroll_area_type"], bedroll_area_type)
 	WRITE_FILE(S["primary_treasury_id"], primary_treasury_id)
 	return TRUE
 
@@ -668,6 +716,10 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	S["home_y"] >> home_y
 	S["home_z"] >> home_z
 	S["home_area_type"] >> home_area_type
+	S["bedroll_x"] >> bedroll_x
+	S["bedroll_y"] >> bedroll_y
+	S["bedroll_z"] >> bedroll_z
+	S["bedroll_area_type"] >> bedroll_area_type
 	S["primary_treasury_id"] >> primary_treasury_id
 	return TRUE
 
@@ -912,13 +964,40 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 				F.add_member(H)
 				break
 
-	// Placement: the saved location. The anchor system (active bedroll >
-	// static home > nearest safezone) replaces this once it lands; until
-	// then the character wakes where they were saved.
-	if(loc_x && loc_y && loc_z)
-		var/turf/T = locate(loc_x, loc_y, loc_z)
-		if(T)
-			H.forceMove(T)
+	// Placement: the anchor system. An active bedroll — one the
+	// character placed themself — comes first, then their claimed
+	// static home, then the saved location. (The nearest safezone
+	// landmark sits between the home and the saved location once
+	// safezones exist; they are not built yet.) Each anchor is
+	// verified against the loaded world, not trusted from the save
+	// alone: the bedroll must still be unfurled at its saved spot,
+	// and the bed must still be there and still claimed by this
+	// character. A verified anchor is also restored onto the mob, so
+	// the next save keeps it. An unverified anchor falls through to
+	// the next one, so a rolled-up bedroll or a lost bed simply
+	// wakes the character where they were saved.
+	var/turf/place_at
+	if(bedroll_x && bedroll_y && bedroll_z)
+		var/turf/bedroll_turf = locate(bedroll_x, bedroll_y, bedroll_z)
+		if(bedroll_turf)
+			for(var/obj/structure/bed/rogue/bedroll/roll in bedroll_turf)
+				H.active_bedroll = roll
+				place_at = bedroll_turf
+				break
+	if(!place_at && home_x && home_y && home_z)
+		var/turf/home_turf = locate(home_x, home_y, home_z)
+		if(home_turf)
+			for(var/obj/structure/bed/B in home_turf)
+				if(istype(B, /obj/structure/bed/rogue/bedroll))
+					continue
+				if(B.claimed_by == H.real_name)
+					H.claimed_home_bed = B
+					place_at = home_turf
+					break
+	if(!place_at && loc_x && loc_y && loc_z)
+		place_at = locate(loc_x, loc_y, loc_z)
+	if(place_at)
+		H.forceMove(place_at)
 
 	// Status effects: none in version 1 (whitelist is empty). Whitelisted
 	// effects are re-applied here when the whitelist gains entries.
