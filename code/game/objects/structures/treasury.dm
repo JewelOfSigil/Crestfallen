@@ -1,7 +1,7 @@
 /*
 	Treasury — a physical vault players place in the world.
 
-	SKELETON, for Jon to fill in. This file is the object itself: the
+	SKELETON, for Derflammenwerfer to fill in. This file is the object itself: the
 	numbers it holds and the ways a player touches it. The TGUI panel
 	backend lives in treasury_tgui.dm, and the screen itself in
 	tgui/packages/tgui/interfaces/TreasuryPanel.tsx.
@@ -24,7 +24,7 @@
 	name = "treasury"
 	desc = "A strongbox for holding mammon."
 	icon = 'icons/roguetown/misc/machines.dmi'
-	icon_state = "treasury" // TODO (Jon): replace with a real sprite.
+	icon_state = "treasury" // TODO: replace with a real sprite.
 	density = TRUE
 	anchored = TRUE
 	// A plain-string id, generated in Initialize. This is what the
@@ -70,7 +70,7 @@ var/global/treasury_uid = 0
 
 /obj/structure/treasury/attackby(obj/item/P, mob/user, params)
 	if(ishuman(user) && istype(P, /obj/item/roguecoin))
-		// TODO (Jon): add the coin's value to the counter and delete
+		// TODO: add the coin's value to the counter and delete
 		// the coin. The coin's value is P.get_real_price(). The
 		// MEISTER does the same shape in ATM.dm attackby.
 		// counter += P.get_real_price()
@@ -80,14 +80,14 @@ var/global/treasury_uid = 0
 	return ..()
 
 /obj/structure/treasury/proc/get_balance_for(mob/living/carbon/human/H)
-	// TODO (Jon): return this character's balance here, or 0.
+	// TODO: return this character's balance here, or 0.
 	// Balances are keyed by character name, so look the name up in
 	// the balances list.
 	// return balances[H.real_name] || 0
 	return 0
 
 /obj/structure/treasury/proc/is_owner(mob/living/carbon/human/H)
-	// TODO (Jon): return TRUE when this user holds the owner's key.
+	// TODO: return TRUE when this user holds the owner's key.
 	// The peddler pattern (vendor.dm): a key whose lockid equals
 	// keycontrol. Check the key in their hands, and keys on a keyring.
 	return FALSE

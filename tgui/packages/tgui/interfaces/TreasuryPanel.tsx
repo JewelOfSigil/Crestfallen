@@ -1,5 +1,5 @@
 /*
-  Treasury panel — SKELETON, for Jon to fill in.
+  Treasury panel — SKELETON, for Derflammenwerfer to fill in.
 
   This mirrors the MEISTER's MeisterPanel.tsx. useBackend gives you
   the data the DM side sent (ui_data / ui_static_data) and act() to
