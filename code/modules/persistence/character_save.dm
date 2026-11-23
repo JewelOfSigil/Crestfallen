@@ -201,6 +201,10 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// Travel is not a way to fast-travel home. A restart save uses
 	// the anchors as usual.
 	var/left_via_fartravel = FALSE
+	// Whether this character has already claimed a house and been
+	// given its resident key. Saved so a claimed house cannot be
+	// claimed again after a restart.
+	var/received_resident_key = FALSE
 	// Treasury. Plain text, never a reference.
 	var/primary_treasury_id = ""
 	// Why the last save failed, for the logs. Empty when the last save worked.
@@ -269,6 +273,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// recorded as one, so the character comes back where they left
 	// from; a restart save is not.
 	left_via_fartravel = via_fartravel ? TRUE : FALSE
+	received_resident_key = H.received_resident_key ? TRUE : FALSE
 
 	// Identity.
 	src.ckey = save_ckey
@@ -550,6 +555,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	WRITE_FILE(S["bedroll_z"], bedroll_z)
 	WRITE_FILE(S["bedroll_area_type"], bedroll_area_type)
 	WRITE_FILE(S["left_via_fartravel"], left_via_fartravel)
+	WRITE_FILE(S["received_resident_key"], received_resident_key)
 	WRITE_FILE(S["primary_treasury_id"], primary_treasury_id)
 	return TRUE
 
@@ -743,6 +749,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	S["bedroll_z"] >> bedroll_z
 	S["bedroll_area_type"] >> bedroll_area_type
 	S["left_via_fartravel"] >> left_via_fartravel
+	S["received_resident_key"] >> received_resident_key
 	S["primary_treasury_id"] >> primary_treasury_id
 	return TRUE
 
@@ -979,6 +986,7 @@ GLOBAL_VAR_INIT(persistence_suppress_populate, FALSE)
 	// is wired to its cleric holder, and that wiring has not been verified
 	// for a load path yet. Revisit when the religion save lands.
 	H.primary_treasury_id = primary_treasury_id || ""
+	H.received_resident_key = received_resident_key ? TRUE : FALSE
 
 	// Fellowship, re-resolved by name.
 	if(fellowship_name)

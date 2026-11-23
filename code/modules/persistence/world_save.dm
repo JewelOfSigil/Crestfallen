@@ -85,7 +85,7 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 // types gain entries here as they need them.
 /proc/persistence_world_type_vars(obj/O)
 	if(istype(O, /obj/structure/mineral_door))
-		return list("door_opened", "locked", "lockid", "lockhash")
+		return list("door_opened", "locked", "lockid", "lockhash", "grant_resident_key")
 	// A key lying in the world (in a chest, on a table) keeps its
 	// lock id and hash the same way a carried one does.
 	if(istype(O, /obj/item/roguekey))
