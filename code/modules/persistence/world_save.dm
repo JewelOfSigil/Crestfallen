@@ -72,24 +72,49 @@
 
 // Atom types never saved (and never recreated). Loot spawners fire at
 // round start, so saving them would double-spawn loot; landmarks and
-// mapping helpers self-delete after loading.
+// mapping helpers self-delete after loading. A gate's blockers are
+// derived state — the gate rebuilds them in its Initialize — so
+// saving them would duplicate them on load, and an orphan blocker
+// stays dense forever, blocking the gate's turfs even when it is open.
 GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 	/obj/effect/spawner/lootdrop,
 	/obj/effect/landmark,
+	/obj/gblock,
 ))
 
-// Per-type extra vars, by typepath. A mineral door's open/closed and
-// locked state live in its own vars, not in density, so they are
-// saved explicitly — as are its lock id and hash, which are plain
-// values (not references) and are what a key matches against. More
-// types gain entries here as they need them.
+/* True while a world save is being restored (the atoms are being
+recreated). Structures whose Initialize kicks off a delayed open or
+close — a bars gate closing itself, a preopen gate opening itself —
+skip that while this is set, so a gate keeps the state it was saved
+in instead of flipping itself a second after boot. The post-load
+re-link (persistence_relink_gates) syncs the blockers to the saved
+state instead. Implemented with AI architecting. */
+GLOBAL_VAR_INIT(persistence_restoring_world, FALSE)
+
+/* Per-type extra vars, by typepath. A mineral door's open/closed and
+locked state live in its own vars, not in density, so they are
+saved explicitly — as are its lock id and hash, which are plain
+values (not references) and are what a key matches against. More
+types gain entries here as they need them. The list is built up
+instead of returning early, so a type can carry both the general
+entries (a structure's redstone id) and its own (a gate's gid).
+Ids are only added when set, so structures without one do not bloat
+the save with a null entry. Implemented with AI architecting. */
 /proc/persistence_world_type_vars(obj/O)
+	var/list/vars = list()
+	// A structure's redstone id is the plain-string link between a
+	// trigger (lever, pressure plate) and a reaction (grille,
+	// passage, shutter). The attached-object references do not
+	// survive a savefile, so the id is saved and the link rebuilt
+	// after the load (see persistence_relink_redstone).
+	if(istype(O, /obj/structure) && O.vars["redstone_id"])
+		vars += list("redstone_id")
 	if(istype(O, /obj/structure/mineral_door))
-		return list("door_opened", "locked", "lockid", "lockhash", "grant_resident_key")
+		vars += list("door_opened", "locked", "lockid", "lockhash", "grant_resident_key")
 	// A key lying in the world (in a chest, on a table) keeps its
 	// lock id and hash the same way a carried one does.
 	if(istype(O, /obj/item/roguekey))
-		return list("lockid", "lockhash")
+		vars += list("lockid", "lockhash")
 	// Tent kits and their components. The kit's assembled state, its
 	// stable id, its repair debts, and its roof's turf coordinates
 	// (as "x,y,z" strings) are saved, so a load can re-link the kit
@@ -97,17 +122,38 @@ GLOBAL_LIST_INIT(persistence_world_skip_types, list(
 	// owning kit's id (the reference itself does not survive a
 	// savefile) and its integrity, so a damaged wall stays damaged.
 	if(istype(O, /obj/item/tent_kit))
-		return list("assembled", "tent_id", "repair_debt_cloth", "repair_debt_silk", "parts_destroyed_count", "roof_turf_coords", "roof_tile_coords")
+		vars += list("assembled", "tent_id", "repair_debt_cloth", "repair_debt_silk", "parts_destroyed_count", "roof_turf_coords", "roof_tile_coords")
 	if(istype(O, /obj/structure/tent_component))
-		return list("parent_tent_id", "obj_integrity")
+		vars += list("parent_tent_id", "obj_integrity")
 	// Beds: who claimed this bed as their home. A bed is a world
 	// atom, so without this the claim would reset on every restart
 	// and the character's saved home would point at a bed that no
 	// longer knows them. tavern_property is a type default, not
 	// instance state, so it needs no entry here.
 	if(istype(O, /obj/structure/bed))
-		return list("claimed_by")
-	return null
+		vars += list("claimed_by")
+	// A floor grille's open/closed state (togg) and whether it is
+	// broken. Without these an open grille comes back closed, and a
+	// broken one comes back whole enough to be a platform again —
+	// the icon alone (a generic var) shows the state but does not
+	// restore the platform flags behind it.
+	if(istype(O, /obj/structure/bars/grille))
+		vars += list("togg", "obj_broken")
+	// A lever's pulled/unpulled state. Its icon is a generic var,
+	// but the var behind it decides what the next pull does.
+	if(istype(O, /obj/structure/lever))
+		vars += list("toggled")
+	// A gate's and a winch's gid is the plain-string link between
+	// them (the attached_gate/attached_to references do not survive
+	// a savefile). Without it every winch matches the first gate
+	// after a load, because a missing gid is null on both sides.
+	if(istype(O, /obj/structure/gate) && O.vars["gid"])
+		vars += list("gid")
+	if(istype(O, /obj/structure/winch) && O.vars["gid"])
+		vars += list("gid")
+	if(!length(vars))
+		return null
+	return vars
 
 // The loaded world's name, sanitised for a folder name (lowercase
 // a-z0-9, like the character-save sanitiser). Falls back to "world"
@@ -383,6 +429,14 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 		vars["alpha"] = O.alpha
 	if(O.name != initial(O.name))
 		vars["name"] = O.name
+	// A mapper's pixel offset (a shifted candle, a winch nudged a
+	// few pixels) is instance state, not a type default, so it is
+	// saved the same way as the other placement vars — otherwise
+	// everything snaps back to its grid cell on load.
+	if(O.pixel_x != initial(O.pixel_x))
+		vars["pixel_x"] = O.pixel_x
+	if(O.pixel_y != initial(O.pixel_y))
+		vars["pixel_y"] = O.pixel_y
 	// Per-type extra vars, saved as they are (they are few, and a
 	// door's locked state matters even when it is the default).
 	var/list/type_vars = persistence_world_type_vars(O)
@@ -485,16 +539,23 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 	// is deferred a tick; this global flag covers any call that runs
 	// synchronously.
 	GLOB.persistence_suppress_populate = TRUE
+	GLOB.persistence_restoring_world = TRUE
 	for(var/z in zs)
 		log_world("Persistence: restoring z[z] ([length(z_data["[z]"]["turfs"])] turfs, [length(z_data["[z]"]["atoms"])] atoms)...")
 		persistence_world_restore_z(z_data["[z]"], z)
 		log_world("Persistence: z[z] restored.")
 	GLOB.persistence_suppress_populate = FALSE
+	GLOB.persistence_restoring_world = FALSE
 	// Tent kits: re-link each restored kit to the walls, doors, and
 	// roof it placed. Without this the kit comes back as though
 	// unused (a fresh set of components inside it) and its tent
 	// becomes a permanent structure with no way to disassemble it.
 	persistence_relink_tents()
+	// Redstone links and gate/winch links are plain-string ids, and
+	// their open/closed state lives in vars the generic save does
+	// not cover — rebuild both now that every atom exists.
+	persistence_relink_redstone()
+	persistence_relink_gates()
 	log_world("Persistence: world restore complete for [map_name].")
 	return TRUE
 
@@ -624,6 +685,73 @@ GLOBAL_LIST_EMPTY(persistence_baseline_turfs)
 		var/obj/item/tent_kit/K = kits_by_id[tent_id]
 		K.restore_assembled_state()
 		K.restore_roof()
+
+/* Rebuild redstone links after a load, and put each floor grille's
+platform back the way its saved state says. A structure's redstone
+id is saved (see persistence_world_type_vars), but at the moment it
+is created during the restore its id is still the type default, so
+its Initialize never registers it and its LateInitialize never
+links it — that has to happen here, once every atom exists. A
+grille's togg and broken state are saved too, but its platform
+flags are not, so they are synced here: open or broken means no
+platform, closed and whole means one. Implemented with AI
+architecting. */
+/proc/persistence_relink_redstone()
+	for(var/obj/structure/S in world)
+		if(S.redstone_id)
+			S.update_redstone_id(S.redstone_id)
+	for(var/obj/structure/bars/grille/G in world)
+		if(G.togg || G.obj_broken)
+			G.set_is_platform(FALSE)
+			G.obj_flags &= ~BLOCK_Z_IN_UP
+		else
+			G.set_is_platform(TRUE)
+			G.obj_flags |= BLOCK_Z_IN_UP
+
+/* Put each gate back the way it was saved, and re-link every winch
+to its gate. A gate's open/closed state is its density, which the
+generic save restores — but the blockers it stands on are not
+synced by that, and its Initialize always builds them dense, so an
+open gate would still block its turfs. Its blockers are also saved
+as separate atoms in older saves, so the restore brings back orphan
+copies alongside the fresh ones; those are removed here (a blocker
+owned by no gate can only be an orphan, since only a gate creates
+them). Winches are linked by their gid, which is saved; the link is
+rebuilt here rather than left to the winch's LateInitialize, so it
+does not depend on the order the atoms were restored in.
+Implemented with AI architecting. */
+/proc/persistence_relink_gates()
+	// Orphan blockers first: any blocker owned by no gate is a
+	// leftover from an older save and stays dense forever.
+	var/list/owned_blockers = list()
+	for(var/obj/structure/gate/G in world)
+		for(var/obj/gblock/B in G.blockers)
+			owned_blockers |= B
+	var/list/orphans = list()
+	for(var/obj/gblock/B in world)
+		if(!(B in owned_blockers))
+			orphans += B
+	for(var/obj/gblock/B in orphans)
+		qdel(B)
+	// Then sync each gate's blockers to its saved density, and
+	// re-link each winch to the gate sharing its gid.
+	for(var/obj/structure/gate/G in world)
+		for(var/obj/gblock/B in G.blockers)
+			if(G.density)
+				B.density = TRUE
+				B.set_opacity(TRUE)
+			else
+				B.density = FALSE
+				B.set_opacity(FALSE)
+		G.update_icon()
+	for(var/obj/structure/winch/W in world)
+		if(!W.gid)
+			continue
+		for(var/obj/structure/gate/G in GLOB.biggates)
+			if(G.gid == W.gid)
+				W.attached_gate = G
+				G.attached_to = W
+				break
 
 // Recreate one saved atom from its entry (type, x, y, vars,
 // contents), at the z-level of the file it came from. The atom is

@@ -1,5 +1,9 @@
 GLOBAL_LIST_EMPTY(redstone_objs)
 
+// Counts links made with the linker, so each one gets a unique id
+// (see the multitool below). Implemented with AI architecting.
+GLOBAL_VAR_INIT(redstone_link_counter, 0)
+
 
 /obj/structure
 	var/redstone_structure = FALSE //If you want the structure to interact with player built redstone
@@ -85,6 +89,13 @@ GLOBAL_LIST_EMPTY(redstone_objs)
 				for(var/obj/structure/O in redstone_attached) //the guild master wrench can clear all patterns
 					O.redstone_attached -= src
 					redstone_attached -= O
+					// Clear the shared link id too, or the wiped
+					// connection would be rebuilt from it after a
+					// world save and load. A structure whose id
+					// belongs to a different network keeps its own.
+					if(O.redstone_id == redstone_id)
+						O.redstone_id = null
+				redstone_id = null
 				GLOB.redstone_objs -= src
 				to_chat(user, "I wipe out all connections to [src]")
 			else
@@ -97,6 +108,23 @@ GLOBAL_LIST_EMPTY(redstone_objs)
 			to_chat(user, "Already linked to another network") //prevent multiple linkings unless it's the guildmaster wrench
 			//we do this check incase someone linked something with another wrench
 			return
+		// Give the link a shared redstone id, so it survives a world
+		// save and load: the attached-object references do not, but
+		// the id is saved and the link is rebuilt from it after the
+		// load (see persistence_relink_redstone). A structure that
+		// already has an id keeps it, and one without adopts the
+		// other's, so a map-placed link is not broken by relinking
+		// it — only a link with no id on either side gets a fresh
+		// one. Implemented with AI architecting.
+		if(!redstone_id && !buffer_structure.redstone_id)
+			GLOB.redstone_link_counter++
+			var/link_id = "redstone-link-[world.realtime]-[GLOB.redstone_link_counter]"
+			redstone_id = link_id
+			buffer_structure.redstone_id = link_id
+		else if(redstone_id && !buffer_structure.redstone_id)
+			buffer_structure.redstone_id = redstone_id
+		else if(!redstone_id && buffer_structure.redstone_id)
+			redstone_id = buffer_structure.redstone_id
 		buffer_structure.redstone_attached |= src
 		redstone_attached |= buffer_structure
 		GLOB.redstone_objs |= src

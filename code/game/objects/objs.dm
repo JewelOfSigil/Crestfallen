@@ -108,6 +108,17 @@
 			our_turf.ai_path_weight += ai_path_weight
 
 /obj/Destroy(force=FALSE)
+	// A platform object (a floor grille) counts itself on its
+	// turf's platform_atom_count when it is created. Take it back
+	// off when it is destroyed, or the count only ever grows — a
+	// world load would double it (the clear step deletes the atom
+	// without this, the restore creates a fresh one that counts
+	// again), and a broken or opened grille would leave a phantom
+	// platform behind. Implemented with AI architecting.
+	if(obj_flags & BLOCK_Z_OUT_DOWN)
+		var/turf/our_turf = get_turf(src)
+		if(our_turf && our_turf.platform_atom_count > 0)
+			our_turf.platform_atom_count--
 	if(!ismachinery(src))
 		STOP_PROCESSING(SSobj, src) // TODO: Have a processing bitflag to reduce on unnecessary loops through the processing lists
 	SStgui.close_uis(src)
@@ -278,7 +289,12 @@
 
 /// Sets the BLOCK_Z_OUT_DOWN obj_flag and runs associated updates.
 /obj/proc/set_is_platform(new_platform_status)
-	if((obj_flags & BLOCK_Z_OUT_DOWN) == new_platform_status)
+	// The flag is a bitmask, so it must be read as a boolean before
+	// comparing it to the wanted state — comparing the raw bit
+	// (1024) to TRUE (1) never matches, so calling this with TRUE
+	// on an already-platform object would toggle the flag off
+	// instead of leaving it alone. Implemented with AI architecting.
+	if(!!(obj_flags & BLOCK_Z_OUT_DOWN) == new_platform_status)
 		return
 	var/turf/our_turf = get_turf(src)
 	obj_flags ^= BLOCK_Z_OUT_DOWN

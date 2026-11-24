@@ -31,7 +31,12 @@ GLOBAL_LIST_EMPTY(biggates)
 
 /obj/structure/gate/preopen/Initialize(mapload)
 	. = ..()
-	INVOKE_ASYNC(src, PROC_REF(open))
+	// During a world restore the saved open/closed state is applied
+	// right after creation, so the roundstart open is skipped —
+	// otherwise a closed gate would open itself a second after boot.
+	// Implemented with AI architecting.
+	if(!GLOB.persistence_restoring_world)
+		INVOKE_ASYNC(src, PROC_REF(open))
 
 /obj/structure/gate/bars
 	desc = "A large portculis, designed to close vertically and to be extremely difficult to break \
@@ -43,14 +48,24 @@ GLOBAL_LIST_EMPTY(biggates)
 
 /obj/structure/gate/bars/Initialize(mapload)
 	. = ..()
-	INVOKE_ASYNC(src, PROC_REF(close))
+	// During a world restore the saved open/closed state is applied
+	// right after creation, so the roundstart close is skipped —
+	// otherwise an open gate would shut itself a second after boot.
+	// Implemented with AI architecting.
+	if(!GLOB.persistence_restoring_world)
+		INVOKE_ASYNC(src, PROC_REF(close))
 
 /obj/structure/gate/bars/preopen
 	icon_state = "bar0"
 
 /obj/structure/gate/bars/preopen/Initialize(mapload)
 	. = ..()
-	INVOKE_ASYNC(src, PROC_REF(open))
+	// During a world restore the saved open/closed state is applied
+	// right after creation, so the roundstart open is skipped —
+	// otherwise a closed gate would open itself a second after boot.
+	// Implemented with AI architecting.
+	if(!GLOB.persistence_restoring_world)
+		INVOKE_ASYNC(src, PROC_REF(open))
 
 /obj/gblock
 	name = ""
@@ -179,7 +194,11 @@ GLOBAL_LIST_EMPTY(biggates)
 
 /obj/structure/winch/LateInitialize()
 	for(var/obj/structure/gate/G in GLOB.biggates)
-		if(G.gid == gid)
+		// A winch with no gid must not match a gate with no gid —
+		// a missing id is null on both sides, so every unlinked
+		// winch would grab the first gate after a load.
+		// Implemented with AI architecting.
+		if(gid && G.gid == gid)
 			attached_gate = G
 			G.attached_to = src
 

@@ -509,6 +509,11 @@
 	return ..()
 
 /obj/structure/bars/grille/obj_break(damage_flag)
+	// A broken grille is no longer a platform: take it off the
+	// turf's count before clearing the flags, or the turf keeps
+	// blocking falls with no grille on it. Implemented with AI
+	// architecting.
+	set_is_platform(FALSE)
 	obj_flags = CAN_BE_HIT
 	..()
 
