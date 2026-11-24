@@ -139,6 +139,12 @@ the save with a null entry. Implemented with AI architecting. */
 	// restore the platform flags behind it.
 	if(istype(O, /obj/structure/bars/grille))
 		vars += list("togg", "obj_broken")
+	// A floor hatch's open/closed state (togg) and whether it is
+	// broken — same pattern as a grille. Without these an open
+	// hatch comes back looking open but behaving closed, and a
+	// broken one comes back a platform again.
+	if(istype(O, /obj/structure/floordoor))
+		vars += list("togg", "obj_broken")
 	// A lever's pulled/unpulled state. Its icon is a generic var,
 	// but the var behind it decides what the next pull does.
 	if(istype(O, /obj/structure/lever))
@@ -701,12 +707,21 @@ architecting. */
 		if(S.redstone_id)
 			S.update_redstone_id(S.redstone_id)
 	for(var/obj/structure/bars/grille/G in world)
+		// Set the flags directly, not via set_is_platform(): at
+		// re-link time no turf has initialised yet, so the turf
+		// count is 0 and set_is_platform(FALSE) would drive it
+		// to -1. The count is built later, by Initialize/Entered,
+		// from the flags as set here.
+		// Implemented with AI architecting.
 		if(G.togg || G.obj_broken)
-			G.set_is_platform(FALSE)
-			G.obj_flags &= ~BLOCK_Z_IN_UP
+			G.obj_flags &= ~(BLOCK_Z_OUT_DOWN | BLOCK_Z_IN_UP)
 		else
-			G.set_is_platform(TRUE)
-			G.obj_flags |= BLOCK_Z_IN_UP
+			G.obj_flags |= (BLOCK_Z_OUT_DOWN | BLOCK_Z_IN_UP)
+	for(var/obj/structure/floordoor/F in world)
+		if(F.togg || F.obj_broken)
+			F.obj_flags &= ~(BLOCK_Z_OUT_DOWN | BLOCK_Z_IN_UP)
+		else
+			F.obj_flags |= (BLOCK_Z_OUT_DOWN | BLOCK_Z_IN_UP)
 
 /* Put each gate back the way it was saved, and re-link every winch
 to its gate. A gate's open/closed state is its density, which the
@@ -778,6 +793,14 @@ Implemented with AI architecting. */
 		for(var/varname in vars)
 			if(varname in O.vars)
 				O.vars[varname] = vars[varname]
+	// Mark a restored gate so its Initialize (which runs later, in
+	// SSatoms) can tell a restored gate from a fresh map gate: only
+	// a fresh one takes its subtype's roundstart open/close, and
+	// only a restored one gets its blockers synced to its saved
+	// density. Implemented with AI architecting.
+	if(istype(O, /obj/structure/gate))
+		var/obj/structure/gate/G = O
+		G.persistence_restored = TRUE
 	// A mineral door's lock is a plain id and hash, not a reference.
 	// The door's Initialize already ran when it was created above,
 	// with a fresh random id and hash that it registered in the

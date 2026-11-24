@@ -18,6 +18,7 @@ GLOBAL_LIST_EMPTY(biggates)
 	var/list/turfsy = list()
 	var/list/blockers = list()
 	var/gid
+	var/persistence_restored = FALSE	// set by the world load; see Edit B
 	attacked_sound = list('sound/combat/hits/onmetal/sheet (1).ogg', 'sound/combat/hits/onmetal/sheet (2).ogg')
 	var/obj/structure/attached_to
 
@@ -31,11 +32,12 @@ GLOBAL_LIST_EMPTY(biggates)
 
 /obj/structure/gate/preopen/Initialize(mapload)
 	. = ..()
-	// During a world restore the saved open/closed state is applied
-	// right after creation, so the roundstart open is skipped —
-	// otherwise a closed gate would open itself a second after boot.
-	// Implemented with AI architecting.
-	if(!GLOB.persistence_restoring_world)
+	// A restored gate's saved open/closed state is already applied
+	// by the time Initialize runs (the restore applies vars first,
+	// and Initialize is deferred to SSatoms), so the roundstart
+	// open is skipped for it — otherwise a closed gate would open
+	// itself a second after boot. Implemented with AI architecting.
+	if(!persistence_restored)
 		INVOKE_ASYNC(src, PROC_REF(open))
 
 /obj/structure/gate/bars
@@ -48,11 +50,12 @@ GLOBAL_LIST_EMPTY(biggates)
 
 /obj/structure/gate/bars/Initialize(mapload)
 	. = ..()
-	// During a world restore the saved open/closed state is applied
-	// right after creation, so the roundstart close is skipped —
-	// otherwise an open gate would shut itself a second after boot.
-	// Implemented with AI architecting.
-	if(!GLOB.persistence_restoring_world)
+	// A restored gate's saved open/closed state is already applied
+	// by the time Initialize runs (the restore applies vars first,
+	// and Initialize is deferred to SSatoms), so the roundstart
+	// close is skipped for it — otherwise an open gate would shut
+	// itself a second after boot. Implemented with AI architecting.
+	if(!persistence_restored)
 		INVOKE_ASYNC(src, PROC_REF(close))
 
 /obj/structure/gate/bars/preopen
@@ -60,11 +63,12 @@ GLOBAL_LIST_EMPTY(biggates)
 
 /obj/structure/gate/bars/preopen/Initialize(mapload)
 	. = ..()
-	// During a world restore the saved open/closed state is applied
-	// right after creation, so the roundstart open is skipped —
-	// otherwise a closed gate would open itself a second after boot.
-	// Implemented with AI architecting.
-	if(!GLOB.persistence_restoring_world)
+	// A restored gate's saved open/closed state is already applied
+	// by the time Initialize runs (the restore applies vars first,
+	// and Initialize is deferred to SSatoms), so the roundstart
+	// open is skipped for it — otherwise a closed gate would open
+	// itself a second after boot. Implemented with AI architecting.
+	if(!persistence_restored)
 		INVOKE_ASYNC(src, PROC_REF(open))
 
 /obj/gblock
@@ -89,6 +93,15 @@ GLOBAL_LIST_EMPTY(biggates)
 		for(var/turf/blocker_tile in turfsy)
 			var/G = new /obj/gblock(blocker_tile)
 			blockers += G
+	// A restored gate's saved density is already applied by the
+	// time Initialize runs (the restore applies vars first, and
+	// Initialize is deferred to SSatoms). Sync the blockers the
+	// gate just built to it, instead of leaving them dense.
+	// Implemented with AI architecting.
+	if(persistence_restored)
+		for(var/obj/gblock/B in blockers)
+			B.density = density
+			B.set_opacity(opacity)
 	GLOB.biggates += src
 
 /obj/structure/gate/Destroy()

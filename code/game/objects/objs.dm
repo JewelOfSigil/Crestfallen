@@ -291,7 +291,7 @@
 /obj/proc/set_is_platform(new_platform_status)
 	// The flag is a bitmask, so it must be read as a boolean before
 	// comparing it to the wanted state — comparing the raw bit
-	// (1024) to TRUE (1) never matches, so calling this with TRUE
+	// (256) to TRUE (1) never matches, so calling this with TRUE
 	// on an already-platform object would toggle the flag off
 	// instead of leaving it alone. Implemented with AI architecting.
 	if(!!(obj_flags & BLOCK_Z_OUT_DOWN) == new_platform_status)
